@@ -1,48 +1,32 @@
 import express from "express";
 import line from "@line/bot-sdk";
 import dotenv from "dotenv";
+import { handleLineEvent } from "./controllers/lineController.js";
 
 dotenv.config();
-
-const app = express();
-app.use(express.json());
 
 const config = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.LINE_CHANNEL_SECRET,
 };
 
-const client = new line.Client(config);
+console.log("🚀 TOKEN:", process.env.LINE_CHANNEL_ACCESS_TOKEN);
+console.log("🚀 SECRET:", process.env.LINE_CHANNEL_SECRET);
 
-// ✅ เช็คว่าเซิร์ฟเวอร์ทำงาน
-app.get("/", (req, res) => {
-  res.send("Bot is running!");
-});
+const app = express();
+app.use(express.json());
 
-// ✅ Webhook จาก LINE
 app.post("/webhook", line.middleware(config), (req, res) => {
-  Promise.all(req.body.events.map(handleEvent))
-    .then(() => res.status(200).end())
+  console.log("📩 Incoming Event:", req.body.events); // ดูว่า LINE ส่งอะไรมา
+
+  Promise.all(req.body.events.map(handleLineEvent))
+    .then((result) => res.json(result))
     .catch((err) => {
-      console.error(err);
+      console.error("❌ Error in webhook:", err);
       res.status(500).end();
     });
 });
 
-// ✅ ฟังก์ชันจัดการข้อความ
-async function handleEvent(event) {
-  if (event.type !== "message" || event.message.type !== "text") {
-    return Promise.resolve(null);
-  }
+app.get("/", (req, res) => res.send("LINE Bot is running!"));
 
-  const replyText = `คุณพิมพ์ว่า: ${event.message.text}`;
-
-  return client.replyMessage(event.replyToken, {
-    type: "text",
-    text: replyText,
-  });
-}
-
-app.listen(3000, () => {
-  console.log("Bot is running on port 3000");
-});
+app.listen(3000, () => console.log("✅ Bot is running on port 3000"));
