@@ -14,9 +14,9 @@ const config = {
 };
 
 app.post("/webhook", line.middleware(config), (req, res) => {
-  Promise.all(req.body.events.map(event => handleLineEvent(event)))
-    .then(result => res.json(result))
-    .catch(err => {
+  Promise.all(req.body.events.map((event) => handleLineEvent(event)))
+    .then((result) => res.json(result))
+    .catch((err) => {
       console.error(err);
       res.status(500).end();
     });
