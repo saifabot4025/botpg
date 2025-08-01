@@ -47,4 +47,11 @@ app.post("/webhook", async (req, res) => {
     res.json(results);
   } catch (err) {
     console.error("❌ Error handling event:", err);
+    res.status(500).send("Internal Server Error");
+  }
+});
 
+// ✅ เริ่มเซิร์ฟเวอร์
+app.listen(3000, () => {
+  console.log("🚀 Bot is running on port 3000");
+});
