@@ -1,6 +1,5 @@
 import line from "@line/bot-sdk";
 import dotenv from "dotenv";
-import { flexMenu } from "../utils/flexMenu.js";
 
 dotenv.config();
 
@@ -8,10 +7,24 @@ const client = new line.Client({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
 });
 
-export const replyMessage = async (replyToken, text) => {
-  await client.replyMessage(replyToken, { type: "text", text });
+export const replyMessage = async (replyToken, message) => {
+  try {
+    await client.replyMessage(replyToken, {
+      type: "text",
+      text: message,
+    });
+  } catch (err) {
+    console.error("❌ replyMessage Error:", err);
+  }
 };
 
 export const pushFlexMenu = async (userId) => {
-  await client.pushMessage(userId, flexMenu);
+  try {
+    await client.pushMessage(userId, {
+      type: "text",
+      text: "นี่คือข้อความต้อนรับจาก LINE Bot 🎉",
+    });
+  } catch (err) {
+    console.error("❌ pushFlexMenu Error:", err);
+  }
 };
