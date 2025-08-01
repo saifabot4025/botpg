@@ -46,4 +46,5 @@ app.post("/webhook", async (req, res) => {
     );
     res.json(results);
   } catch (err) {
-    console.error("❌ Error handling ev
+    console.error("❌ Error handling event:", err);
+
