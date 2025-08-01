@@ -1,24 +1,17 @@
-import fetch from "node-fetch";
-import { createFlexMenu } from "../utils/flexMenu.js";
+// controllers/lineController.js
 import { handleCustomerFlow } from "../utils/flowManager.js";
+import { createFlexMenu } from "../utils/flexMenu.js";
 import { sendTelegramAlert } from "../services/telegramService.js";
+import fetch from "node-fetch";
 
 const LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply";
 const ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
-/**
- * ✅ ฟังก์ชันส่งข้อความตอบกลับไปยัง LINE
- */
 async function replyMessage(replyToken, messages) {
-  if (!replyToken || !messages || messages.length === 0) {
-    console.warn("⚠️ replyMessage ไม่ทำงานเพราะไม่มี replyToken หรือ messages");
-    return;
-  }
-
-  console.log("📤 [replyMessage] กำลังส่งข้อความ:", messages);
+  if (!replyToken || !messages || messages.length === 0) return;
 
   try {
-    const res = await fetch(LINE_REPLY_URL, {
+    await fetch(LINE_REPLY_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -29,86 +22,30 @@ async function replyMessage(replyToken, messages) {
         messages: Array.isArray(messages) ? messages : [messages],
       }),
     });
-
-    const data = await res.json().catch(() => ({}));
-    console.log("✅ [replyMessage] ส่งข้อความเรียบร้อย:", data);
   } catch (error) {
-    console.error("❌ Error sending reply message:", error);
+    console.error("Error sending reply message:", error);
   }
 }
 
-/**
- * ✅ จัดการ Event ที่มาจาก LINE
- */
 export async function handleLineEvent(event) {
-  console.log("🔥 [handleLineEvent Triggered] Event:", event);
-
-  let replyMessages = [];
-
   try {
-    // กรณีลูกค้าเพิ่มเพื่อน
-    if (event.type === "follow") {
-      console.log("📥 Event: follow");
+    // บันทึก log
+    console.log("Event received:", event);
 
-      replyMessages.push({
-        type: "text",
-        text:
-          "ขอบคุณที่เพิ่มเพื่อนค่ะ 💕 ยินดีต้อนรับสู่ PGTHAI289\n" +
-          "เว็บมั่นคง ปลอดภัย ฝาก-ถอนออโต้\n" +
-          "🔥 สมัครวันนี้ หนูแถมใจให้ทันทีเลยค่าพี่ บริการไม่ดียินดีคืนเงิน! 🔥",
-      });
+    // เรียก flowManager
+    const replyMessages = await handleCustomerFlow(event);
 
-      replyMessages.push(createFlexMenu());
-
-      await sendTelegramAlert(`📥 ลูกค้าใหม่เพิ่มเพื่อน (LINE OA: PGTHAI289)\nID: ${event.source?.userId}`);
-
-      await replyMessage(event.replyToken, replyMessages);
-      return;
-    }
-
-    // กรณีลูกค้าส่งข้อความ หรือ กดปุ่ม Postback
-    if (event.type === "message" || event.type === "postback") {
-      console.log("💬 Event: message/postback", event.type);
-
-      const flowResult = await handleCustomerFlow(event);
-      console.log("📩 Flow Result:", flowResult);
-
-      if (Array.isArray(flowResult)) {
-        replyMessages.push(...flowResult.filter((m) => m.type));
-      } else if (typeof flowResult === "string") {
-        replyMessages.push({ type: "text", text: flowResult });
-      }
-
-      // ถ้า flowResult บอกไม่ต้องเพิ่ม flex menu (skipFlex) จะไม่เพิ่ม
-      const skipFlex =
-        Array.isArray(flowResult) &&
-        flowResult.some((m) => m.skipFlex === true);
-
-      if (!skipFlex) {
-        replyMessages.push(createFlexMenu());
-      }
-
-      // ถ้า replyMessages ว่างเปล่า ให้ส่งข้อความสำรอง
-      if (replyMessages.length === 0) {
-        replyMessages.push({
-          type: "text",
-          text: "น้องกำลังดูแลให้ค่ะ 💕 หากต้องการความช่วยเหลือเพิ่มเติม ทักมาได้เลยนะคะ",
-        });
-      }
-
-      console.log("📝 replyMessages ก่อนส่ง:", replyMessages);
-
+    // ส่งข้อความตอบกลับถ้ามี
+    if (replyMessages.length > 0) {
       await replyMessage(event.replyToken, replyMessages);
     }
   } catch (error) {
-    console.error("❌ handleLineEvent Error:", error);
-
+    console.error("handleLineEvent error:", error);
     await replyMessage(event.replyToken, [
       {
         type: "text",
         text:
-          "ขออภัยค่ะ 😥 รอสักครู่นะคะพี่แอดมินตรวจสอบให้ค่ะ\n" +
-          "หากยังมีปัญหา แอดมินจะรีบช่วยเหลือคุณพี่โดยเร็วค่ะ 💕",
+          "ขออภัยค่ะ พี่แอดมินกำลังตรวจสอบอยู่ค่ะ โปรดลองใหม่อีกครั้งนะคะ 💕",
       },
     ]);
   }
