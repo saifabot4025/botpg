@@ -3,9 +3,6 @@ let userStates = {};
 
 /**
  * กำหนดสถานะให้ user
- * @param {string} userId - ไอดีลูกค้าจาก LINE
- * @param {string} status - normal | waiting | collectingData
- * @param {object} extraData - เก็บข้อมูลเพิ่มเติม เช่น ปัญหาที่แจ้ง, step ปัจจุบัน
  */
 export function setUserState(userId, status, extraData = {}) {
   userStates[userId] = {
@@ -26,6 +23,13 @@ export function getUserState(userId) {
  */
 export function resetUserState(userId) {
   userStates[userId] = { status: "normal" };
+}
+
+/**
+ * ลบ state ของ user ออกจาก memory
+ */
+export function clearUserState(userId) {
+  delete userStates[userId];
 }
 
 /**
