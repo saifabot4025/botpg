@@ -5,8 +5,12 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+export function getRandomCuteName() {
+  return staffNames[Math.floor(Math.random() * staffNames.length)];
+}
+
 export async function getCuteDynamicReply(baseMessage) {
-  const randomStaff = staffNames[Math.floor(Math.random() * staffNames.length)];
+  const randomStaff = getRandomCuteName();
   const prompt = `
   สร้างข้อความตอบลูกค้าแบบน่ารัก อ้อน ๆ เป็นกันเอง
   ใส่ชื่อ "${randomStaff}" เป็นผู้ช่วยลูกค้า
