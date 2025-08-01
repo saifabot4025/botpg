@@ -1,31 +1,24 @@
 import fetch from "node-fetch";
+const LINE_API = "https://api-data.line.me/v2/bot/message";
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-
-export async function sendTelegramAlert(message, photoUrl = null) {
+export async function getLineImage(messageId) {
   try {
-    if (photoUrl) {
-      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: TELEGRAM_CHAT_ID,
-          caption: message,
-          photo: photoUrl,
-        }),
-      });
-    } else {
-      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: TELEGRAM_CHAT_ID,
-          text: message,
-        }),
-      });
-    }
+    const res = await fetch(`${LINE_API}/${messageId}/content`, {
+      headers: {
+        Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+      },
+    });
+
+    // แปลงรูปเป็น Base64 แล้วอัพโหลดไป imgur / cloudinary
+    const buffer = await res.arrayBuffer();
+    const base64Image = Buffer.from(buffer).toString("base64");
+
+    // ✅ ถ้าใช้ Cloudinary → อัพโหลดต่อแล้วส่ง URL
+    // หรือถ้ามี proxy image API → ใช้ URL จากนั้น
+    // ตอนนี้จะ return เป็น Data URL (Telegram รองรับ)
+    return `data:image/jpeg;base64,${base64Image}`;
   } catch (err) {
-    console.error("Telegram Error:", err);
+    console.error("Error fetching LINE image:", err);
+    return null;
   }
 }
