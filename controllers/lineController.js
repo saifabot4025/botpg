@@ -81,14 +81,6 @@ export async function handleLineEvent(event) {
 
       console.log("📝 replyMessages ก่อนเพิ่ม Flex:", replyMessages);
 
-      // ✅ ตรวจสอบว่าต้องเพิ่ม Flex Menu หรือไม่
-      const skipFlex =
-        Array.isArray(flowResult) && flowResult.some((m) => m.skipFlex === true);
-
-      if (!skipFlex) {
-        replyMessages.push(createFlexMenu());
-      }
-
       console.log("✅ replyMessages ที่จะส่ง:", replyMessages);
 
       await replyMessage(event.replyToken, replyMessages);
