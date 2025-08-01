@@ -1,6 +1,78 @@
 import fetch from "node-fetch";
+import FormData from "form-data";
+
+const TELEGRAM_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
 const LINE_API = "https://api-data.line.me/v2/bot/message";
 
+/**
+ * ✅ แจ้งเตือนเป็นข้อความไป Telegram Group
+ */
+export async function sendTelegramAlert(text) {
+  try {
+    await fetch(`${TELEGRAM_API}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: process.env.TELEGRAM_GROUP_CHAT_ID,
+        text,
+        parse_mode: "HTML",
+      }),
+    });
+  } catch (err) {
+    console.error("❌ Error sending Telegram alert:", err);
+  }
+}
+
+/**
+ * ✅ ส่งรูปไป Telegram Group (รองรับ Buffer จาก LINE API)
+ */
+export async function sendTelegramPhoto(photoBuffer, caption = "") {
+  try {
+    const formData = new FormData();
+    formData.append("chat_id", process.env.TELEGRAM_GROUP_CHAT_ID);
+    formData.append("caption", caption);
+    formData.append("photo", photoBuffer, "line-image.jpg");
+
+    const res = await fetch(`${TELEGRAM_API}/sendPhoto`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!res.ok) {
+      console.error("❌ Telegram sendPhoto error:", await res.text());
+    }
+  } catch (err) {
+    console.error("❌ Error sending photo to Telegram:", err);
+  }
+}
+
+/**
+ * ✅ ดึงโปรไฟล์ลูกค้าจาก LINE (ใช้ userId)
+ */
+export async function getLineProfile(userId) {
+  try {
+    const res = await fetch(
+      `https://api.line.me/v2/bot/profile/${userId}`,
+      {
+        headers: { Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
+      }
+    );
+
+    if (!res.ok) {
+      console.error("❌ LINE getProfile error:", res.status, res.statusText);
+      return null;
+    }
+
+    return await res.json(); // { displayName, userId, pictureUrl, statusMessage }
+  } catch (err) {
+    console.error("❌ Error fetching LINE profile:", err);
+    return null;
+  }
+}
+
+/**
+ * ✅ ดึงรูปจาก LINE API → return Buffer เพื่อส่งเข้า Telegram ได้เลย
+ */
 export async function getLineImage(messageId) {
   try {
     const res = await fetch(`${LINE_API}/${messageId}/content`, {
@@ -9,16 +81,14 @@ export async function getLineImage(messageId) {
       },
     });
 
-    // แปลงรูปเป็น Base64 แล้วอัพโหลดไป imgur / cloudinary
-    const buffer = await res.arrayBuffer();
-    const base64Image = Buffer.from(buffer).toString("base64");
+    if (!res.ok) {
+      console.error("❌ LINE API error:", res.status, res.statusText);
+      return null;
+    }
 
-    // ✅ ถ้าใช้ Cloudinary → อัพโหลดต่อแล้วส่ง URL
-    // หรือถ้ามี proxy image API → ใช้ URL จากนั้น
-    // ตอนนี้จะ return เป็น Data URL (Telegram รองรับ)
-    return `data:image/jpeg;base64,${base64Image}`;
+    return Buffer.from(await res.arrayBuffer()); // ส่ง Buffer ออก
   } catch (err) {
-    console.error("Error fetching LINE image:", err);
+    console.error("❌ Error fetching LINE image:", err);
     return null;
   }
 }
