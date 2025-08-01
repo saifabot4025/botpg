@@ -46,7 +46,7 @@ export async function handleLineEvent(event) {
   let replyMessages = [];
 
   try {
-    // ✅ กรณีลูกค้าเพิ่มเพื่อน
+    // กรณีลูกค้าเพิ่มเพื่อน
     if (event.type === "follow") {
       console.log("📥 Event: follow");
 
@@ -66,7 +66,7 @@ export async function handleLineEvent(event) {
       return;
     }
 
-    // ✅ กรณีลูกค้าส่งข้อความ หรือ กดปุ่ม Postback
+    // กรณีลูกค้าส่งข้อความ หรือ กดปุ่ม Postback
     if (event.type === "message" || event.type === "postback") {
       console.log("💬 Event: message/postback", event.type);
 
@@ -79,9 +79,24 @@ export async function handleLineEvent(event) {
         replyMessages.push({ type: "text", text: flowResult });
       }
 
-      console.log("📝 replyMessages ก่อนเพิ่ม Flex:", replyMessages);
+      // ถ้า flowResult บอกไม่ต้องเพิ่ม flex menu (skipFlex) จะไม่เพิ่ม
+      const skipFlex =
+        Array.isArray(flowResult) &&
+        flowResult.some((m) => m.skipFlex === true);
 
-      console.log("✅ replyMessages ที่จะส่ง:", replyMessages);
+      if (!skipFlex) {
+        replyMessages.push(createFlexMenu());
+      }
+
+      // ถ้า replyMessages ว่างเปล่า ให้ส่งข้อความสำรอง
+      if (replyMessages.length === 0) {
+        replyMessages.push({
+          type: "text",
+          text: "น้องกำลังดูแลให้ค่ะ 💕 หากต้องการความช่วยเหลือเพิ่มเติม ทักมาได้เลยนะคะ",
+        });
+      }
+
+      console.log("📝 replyMessages ก่อนส่ง:", replyMessages);
 
       await replyMessage(event.replyToken, replyMessages);
     }
