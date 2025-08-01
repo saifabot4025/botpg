@@ -6,6 +6,8 @@ const LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply";
 const ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
 async function replyMessage(replyToken, messages) {
+  if (!replyToken || !messages || messages.length === 0) return;
+
   await fetch(LINE_REPLY_URL, {
     method: "POST",
     headers: {
@@ -20,21 +22,45 @@ async function replyMessage(replyToken, messages) {
 }
 
 export async function handleLineEvent(event) {
-  let messages = [];
+  let replyMessages = [];
 
+  // ✅ กรณีลูกค้าเพิ่มเพื่อน
   if (event.type === "follow") {
-    messages.push({ type: "text", text: "ขอบคุณที่เพิ่มเพื่อนค่ะ 💕" });
-    messages.push(createFlexMenu());
-    await replyMessage(event.replyToken, messages);
+    replyMessages.push({
+      type: "text",
+      text: "ขอบคุณที่เพิ่มเพื่อนค่ะ 💕 ยินดีต้อนรับสู่ PGTHAI289 เว็บมั่นคง ปลอดภัย ฝาก-ถอนออโต้ ชวนเพื่อนมาเล่นรับโบนัสเพียบ!",
+    });
+
+    replyMessages.push(createFlexMenu());
+
+    await replyMessage(event.replyToken, replyMessages);
     return;
   }
 
+  // ✅ กรณีข้อความหรือกดปุ่ม
   if (event.type === "message" || event.type === "postback") {
-    const flowResponse = await handleFlow(event);
-    if (flowResponse) {
-      messages.push({ type: "text", text: flowResponse });
-    }
-    messages.push(createFlexMenu());
-    await replyMessage(event.replyToken, messages);
-  }
-}
+    try {
+      // 🔹 handleFlow ควร return เป็น array ของ message objects
+      const flowResult = await handleFlow(event);
+
+      if (flowResult && Array.isArray(flowResult)) {
+        replyMessages.push(...flowResult);
+      } else if (typeof flowResult === "string") {
+        replyMessages.push({ type: "text", text: flowResult });
+      }
+
+      // ✅ ถ้าลูกค้าอยู่ใน flow ที่รอแอดมิน ไม่ต้องส่ง flex menu ซ้ำ
+      const shouldSendFlex = !(
+        flowResult &&
+        typeof flowResult === "object" &&
+        flowResult.skipFlex
+      );
+
+      if (shouldSendFlex) {
+        replyMessages.push(createFlexMenu());
+      }
+
+      await replyMessage(event.replyToken, replyMessages);
+    } catch (error) {
+      console.error("❌ handleLineEvent Error:", error);
+      await replyMessage(event.
