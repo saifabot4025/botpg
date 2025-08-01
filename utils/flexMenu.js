@@ -10,10 +10,28 @@ export function createFlexMenu() {
           "🎀 สมัครง่าย ๆ เพียงกดปุ่มด้านล่าง เลือกวิธีที่คุณสะดวกที่สุด มั่นคง 💯 จ่ายจริง 💵",
           "https://i.ibb.co/SqbNcr1/image.jpg",
           [
-            { label: "✨ สมัครเอง", action: { type: "uri", uri: "https://pgthai289.net/customer/register/LINEBOT/?openExternalBrowser=1" } },
-            { label: "🤍 ให้แอดมินสมัครให้", action: { type: "message", text: "สมัครให้" } },
-            { label: "🎰 ทางเข้าเล่นหลัก", action: { type: "uri", uri: "https://pgthai289.net/?openExternalBrowser=1" } },
-            { label: "🛡 ทางเข้าเล่นสำรอง", action: { type: "message", text: "ขอทางเข้าสำรอง" } }
+            {
+              label: "✨ สมัครเอง",
+              action: {
+                type: "uri",
+                uri: "https://pgthai289.net/customer/register/LINEBOT/?openExternalBrowser=1",
+              },
+            },
+            {
+              label: "🤍 ให้แอดมินสมัครให้",
+              action: { type: "message", text: "สมัครให้" },
+            },
+            {
+              label: "🎰 ทางเข้าเล่นหลัก",
+              action: {
+                type: "uri",
+                uri: "https://pgthai289.net/?openExternalBrowser=1",
+              },
+            },
+            {
+              label: "🛡 ทางเข้าเล่นสำรอง",
+              action: { type: "message", text: "ขอทางเข้าสำรอง" },
+            },
           ]
         ),
         createCard(
@@ -84,7 +102,10 @@ function createCard(title, desc, imageUrl, buttons) {
         style: "primary",
         color: "#8E44AD",
         height: "sm",
-        action: btn.action
+        action: {
+          ...btn.action, // คงค่า type, uri หรือ text เดิม
+          label: btn.label // ✅ เพิ่ม label เข้าไปใน action
+        }
       })),
       flex: 0
     },
