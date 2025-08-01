@@ -5,7 +5,7 @@ const TELEGRAM_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOK
 const LINE_API = "https://api-data.line.me/v2/bot/message";
 
 /**
- * ✅ แจ้งเตือนเป็นข้อความไป Telegram Group
+ * ✅ แจ้งเตือนข้อความไป Telegram Group
  */
 export async function sendTelegramAlert(text) {
   try {
@@ -24,7 +24,7 @@ export async function sendTelegramAlert(text) {
 }
 
 /**
- * ✅ ส่งรูปไป Telegram Group (รองรับ Buffer จาก LINE API)
+ * ✅ ส่งรูปไป Telegram Group
  */
 export async function sendTelegramPhoto(photoBuffer, caption = "") {
   try {
@@ -47,7 +47,7 @@ export async function sendTelegramPhoto(photoBuffer, caption = "") {
 }
 
 /**
- * ✅ ดึงโปรไฟล์ลูกค้าจาก LINE (ใช้ userId)
+ * ✅ ดึงโปรไฟล์ลูกค้าจาก LINE
  */
 export async function getLineProfile(userId) {
   try {
@@ -58,12 +58,8 @@ export async function getLineProfile(userId) {
       }
     );
 
-    if (!res.ok) {
-      console.error("❌ LINE getProfile error:", res.status, res.statusText);
-      return null;
-    }
-
-    return await res.json(); // { displayName, userId, pictureUrl, statusMessage }
+    if (!res.ok) return null;
+    return await res.json();
   } catch (err) {
     console.error("❌ Error fetching LINE profile:", err);
     return null;
@@ -71,7 +67,7 @@ export async function getLineProfile(userId) {
 }
 
 /**
- * ✅ ดึงรูปจาก LINE API → return Buffer เพื่อส่งเข้า Telegram ได้เลย
+ * ✅ ดึงรูปจาก LINE API → Buffer (ส่งเข้า Telegram ได้เลย)
  */
 export async function getLineImage(messageId) {
   try {
@@ -81,12 +77,8 @@ export async function getLineImage(messageId) {
       },
     });
 
-    if (!res.ok) {
-      console.error("❌ LINE API error:", res.status, res.statusText);
-      return null;
-    }
-
-    return Buffer.from(await res.arrayBuffer()); // ส่ง Buffer ออก
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
   } catch (err) {
     console.error("❌ Error fetching LINE image:", err);
     return null;
