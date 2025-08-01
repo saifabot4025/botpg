@@ -7,7 +7,6 @@ dotenv.config();
 
 const app = express();
 
-// ✅ โหลดค่าจาก .env
 const CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET;
 
@@ -16,7 +15,7 @@ if (!CHANNEL_ACCESS_TOKEN || !CHANNEL_SECRET) {
   process.exit(1);
 }
 
-// ✅ ใช้ express.json() เพื่อเก็บ raw body (สำหรับตรวจลายเซ็น)
+// ✅ ใช้ express.json() เก็บ raw body (ต้องใช้สำหรับตรวจ signature)
 app.use(
   express.json({
     verify: (req, res, buf) => {
@@ -25,24 +24,34 @@ app.use(
   })
 );
 
-// ✅ ฟังก์ชันตรวจสอบ Signature
+// ✅ ตรวจสอบ Signature
 function verifySignature(req) {
   const signature = crypto
     .createHmac("SHA256", CHANNEL_SECRET)
     .update(req.rawBody)
     .digest("base64");
-  return signature === req.get("x-line-signature");
+  const isValid = signature === req.get("x-line-signature");
+  console.log("🔑 Signature Valid:", isValid);
+  return isValid;
 }
 
-// ✅ Webhook ของ LINE
+// ✅ Webhook Endpoint
 app.post("/webhook", async (req, res) => {
+  console.log("🔥 [Webhook Triggered]");
+  console.log("📩 Headers:", req.headers);
+  console.log("📨 Body:", JSON.stringify(req.body, null, 2));
+
   if (!verifySignature(req)) {
+    console.warn("🚨 Signature verification failed!");
     return res.status(403).send("Invalid signature");
   }
 
   try {
     const results = await Promise.all(
-      req.body.events.map((event) => handleLineEvent(event))
+      req.body.events.map((event) => {
+        console.log("✅ Event Received:", event);
+        return handleLineEvent(event);
+      })
     );
     res.json(results);
   } catch (err) {
@@ -51,7 +60,7 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-// ✅ เริ่มเซิร์ฟเวอร์
+// ✅ Start Server
 app.listen(3000, () => {
   console.log("🚀 Bot is running on port 3000");
 });
