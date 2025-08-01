@@ -1,3 +1,4 @@
+
 import express from "express";
 import line from "@line/bot-sdk";
 import dotenv from "dotenv";
@@ -13,17 +14,15 @@ const config = {
   channelSecret: process.env.LINE_CHANNEL_SECRET,
 };
 
-app.post("/webhook", line.middleware(config), async (req, res) => {
-  try {
-    await Promise.all(req.body.events.map((event) => handleLineEvent(event)));
-    res.status(200).send("OK");
-  } catch (err) {
-    console.error("❌ Webhook Error:", err);
-    res.status(500).send("Error");
-  }
+app.post("/webhook", line.middleware(config), (req, res) => {
+  Promise.all(req.body.events.map(event => handleLineEvent(event)))
+    .then(result => res.json(result))
+    .catch(err => {
+      console.error(err);
+      res.status(500).end();
+    });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Bot is running on port ${PORT}`);
+app.listen(3000, () => {
+  console.log("Bot running on port 3000");
 });
