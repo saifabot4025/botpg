@@ -65,9 +65,9 @@ async function generateWithdrawReviewMessage() {
   for (let i = 0; i < 10; i++) {
     const phone = randomMaskedPhone();
     const amount = (Math.floor(Math.random() * 45000) + 5000).toLocaleString();
-    list.push(`ยูส ${phone} ถอน ${amount} เวลา ${randomTimeWithinLast30Min()}`);
+    list.push(`ยูส ${phone} ถอน ${amount}`);
   }
-  return `📊 รีวิวการถอน 30 นาทีที่ผ่านมา\n\n${list.join("\n")}`;
+  return `📊 รีวิวการถอนล่าสุด\n\n${list.join("\n")}`;
 }
 
 async function generateMaxWithdrawMessage() {
