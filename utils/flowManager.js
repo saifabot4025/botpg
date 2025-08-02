@@ -464,7 +464,7 @@ updateUserState(userId, state);
 }
 
 /* ================== CRM FOLLOW-UP (3,7,15,30 วัน) ================== */
-export function initCRM(lineClient) {
+function initCRM(lineClient) {
   setInterval(async () => {
     const now = Date.now();
     const followupPeriods = [
@@ -491,4 +491,6 @@ export function initCRM(lineClient) {
       }
     }
   }, 6 * 60 * 60 * 1000);
+}
+module.exports = { initCRM, handleCustomerFlow };
 }
