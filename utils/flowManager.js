@@ -7,7 +7,7 @@ import { getLineImage } from "../services/lineMediaService.js";
 const userStates = {};
 const userPausedStates = {};
 const flexCooldown = 2 * 60 * 60 * 1000;
-const greetCooldown = 10 * 60 * 1000; // 10 นาที
+const greetCooldown = 10 * 60 * 1000;
 
 function getUserState(userId) {
   if (!userStates[userId]) {
@@ -26,20 +26,17 @@ function updateUserState(userId, newState) {
 }
 
 function shouldSendFlex(userId) {
-  const state = getUserState(userId);
-  return Date.now() - state.lastFlexSent > flexCooldown;
+  return Date.now() - getUserState(userId).lastFlexSent > flexCooldown;
 }
 
 function shouldGreet(userId) {
-  const state = getUserState(userId);
-  return Date.now() - state.lastGreeted > greetCooldown;
+  return Date.now() - getUserState(userId).lastGreeted > greetCooldown;
 }
 
 // ================== UTILITIES ==================
 function randomMaskedPhone() {
   return `08xxxx${Math.floor(1000 + Math.random() * 9000)}`;
 }
-
 function randomName() {
   const names = ["คุณต้น", "คุณใหม่", "คุณก้อย", "คุณเอ็ม", "คุณปอนด์", "คุณบี", "คุณพีท", "คุณตั้ม"];
   return names[Math.floor(Math.random() * names.length)];
@@ -60,7 +57,7 @@ async function notifyAdmin(event, message) {
   }
 }
 
-// ================== STATIC MESSAGES ==================
+// ================== STATIC RESPONSES ==================
 let cachedMaxWithdrawDate = null;
 let cachedMaxWithdrawAmount = null;
 
@@ -73,7 +70,6 @@ async function generateWithdrawReviewMessage() {
   }
   return `📊 รีวิวการถอนล่าสุด\n\n${list.join("\n")}`;
 }
-
 async function generateMaxWithdrawMessage() {
   const today = new Date().toLocaleDateString("th-TH");
   if (cachedMaxWithdrawDate !== today) {
@@ -82,7 +78,6 @@ async function generateMaxWithdrawMessage() {
   }
   return `👑 ยอดถอนสูงสุดวันนี้\n\nยินดีกับคุณพี่ "สมชาย" ยูส ${randomMaskedPhone()} ถอน ${cachedMaxWithdrawAmount.toLocaleString()} บาท\nวันที่ ${cachedMaxWithdrawDate}`;
 }
-
 async function generateTopGameMessage() {
   const games = ["สาวถ้ำ", "กิเลน", "Lucky Neko", "Fortune Ox", "Dragon Hatch", "Fortune Rabbit"];
   const selected = games.sort(() => 0.5 - Math.random()).slice(0, 5);
@@ -92,7 +87,6 @@ async function generateTopGameMessage() {
   msg += `💥 ปั่นธรรมดาแตกล่าสุด: ${(Math.floor(Math.random() * 47000) + 3000).toLocaleString()} บาท`;
   return msg;
 }
-
 async function generateReferralCommissionMessage() {
   const list = [];
   for (let i = 0; i < 10; i++) {
@@ -107,36 +101,42 @@ async function generateReferralCommissionMessage() {
 async function analyzeUserIntent(text) {
   const prompt = `
 คุณคือระบบวิเคราะห์ Intent ของข้อความลูกค้า
-- ประเภท: "problem" (ปัญหา), "finance" (การเงิน), "register" (สมัคร), "general_question" (คำถามทั่วไป), "emotion" (อารมณ์)
+- ประเภท: "problem", "finance", "register", "general_question", "emotion"
 - ตอบ JSON เท่านั้น เช่น {"intent":"register","summary":"ลูกค้าต้องการสมัครสมาชิก"}
 ข้อความลูกค้า: "${text}"
 `;
   try {
     const result = await getCuteDynamicReply(prompt);
     return JSON.parse(result);
-  } catch {
+  } catch (err) {
+    console.error("analyzeUserIntent Error:", err);
     return { intent: "unknown", summary: text };
   }
 }
 
 async function generateSmartReply(text) {
-  const intent = await analyzeUserIntent(text);
-  let prompt = "";
+  let gptReply = "น้องขอโทษค่ะ เกิดข้อผิดพลาด ลองพิมพ์ใหม่อีกครั้งนะคะ 💕";
+  try {
+    const intent = await analyzeUserIntent(text);
+    let prompt = "";
+    if (intent.intent === "emotion")
+      prompt = `ลูกค้ารู้สึก ${intent.summary} ตอบแบบเพื่อนคุย น่ารัก และแนะนำ pgthai289 เบาๆ`;
+    else if (intent.intent === "general_question")
+      prompt = `ลูกค้าถาม ${intent.summary} ตอบแบบละเอียด กระชับ และชวนเล่น pgthai289`;
+    else if (intent.intent === "register")
+      prompt = `ลูกค้าต้องการสมัครสมาชิก อธิบายขั้นตอนสมัคร pgthai289 แบบละเอียดและสุภาพ`;
+    else if (intent.intent === "finance")
+      prompt = `ลูกค้าสนใจเรื่องการเงิน (${intent.summary}) ตอบวิธีฝากถอน pgthai289 อย่างละเอียด`;
+    else if (intent.intent === "problem")
+      prompt = `ลูกค้ามีปัญหา (${intent.summary}) ตอบสุภาพ น่ารัก และบอกขั้นตอนแก้ปัญหา`;
+    else
+      prompt = `ตอบข้อความนี้อย่างสุภาพและมีประโยชน์ พร้อมชวนเล่น pgthai289 เบาๆ: "${text}"`;
 
-  if (intent.intent === "emotion")
-    prompt = `ลูกค้ารู้สึก ${intent.summary} ตอบแบบเพื่อนคุย น่ารัก และแนะนำ pgthai289 เบาๆ`;
-  else if (intent.intent === "general_question")
-    prompt = `ลูกค้าถาม ${intent.summary} ตอบแบบละเอียด กระชับ มีประโยชน์ และชวนเล่น pgthai289 เบาๆ`;
-  else if (intent.intent === "register")
-    prompt = `ลูกค้าต้องการสมัครสมาชิก อธิบายขั้นตอนสมัคร pgthai289 แบบละเอียดและสุภาพ`;
-  else if (intent.intent === "finance")
-    prompt = `ลูกค้าสนใจเรื่องการเงิน (${intent.summary}) ตอบวิธีฝากถอน pgthai289 อย่างละเอียด`;
-  else if (intent.intent === "problem")
-    prompt = `ลูกค้ามีปัญหา (${intent.summary}) ตอบสุภาพ น่ารัก และบอกขั้นตอนแก้ปัญหา`;
-  else
-    prompt = `ตอบข้อความนี้อย่างสุภาพและมีประโยชน์ พร้อมชวนเล่น pgthai289 เบาๆ: "${text}"`;
-
-  return await getCuteDynamicReply(prompt);
+    gptReply = await getCuteDynamicReply(prompt);
+  } catch (err) {
+    console.error("generateSmartReply Error:", err);
+  }
+  return gptReply;
 }
 
 // ================== POSTBACK MAP ==================
@@ -153,14 +153,14 @@ const caseMap = {
   referral_commission: "referral_commission",
 };
 
-// ================== HANDLE FLOW ==================
+// ================== MAIN FLOW ==================
 export async function handleCustomerFlow(event) {
   const userId = event.source?.userId;
   const state = getUserState(userId);
   const replyMessages = [];
   const userText = event.message?.text?.trim() || "";
 
-  // Check Pause State
+  // Pause State
   if (userPausedStates[userId]) {
     if (userText.includes("ดำเนินการให้เรียบร้อยแล้วนะคะพี่")) {
       userPausedStates[userId] = false;
@@ -172,7 +172,7 @@ export async function handleCustomerFlow(event) {
     return replyMessages;
   }
 
-  // Postback Handling
+  // Postback
   if (event.type === "postback" && event.postback?.data) {
     const data = event.postback.data;
     replyMessages.push({ type: "text", text: `✅ คุณเลือก: ${data}` });
@@ -200,11 +200,11 @@ export async function handleCustomerFlow(event) {
     }
   }
 
-  // If currentCase exists → wait for info
+  // Current Case
   if (state.currentCase) {
     if (userText.length > 5 || event.message?.type === "image") {
       await notifyAdmin(event, `ข้อมูลจากลูกค้า (เคส ${state.currentCase}): ${userText || "ส่งรูป"}`);
-      replyMessages.push({ type: "text", text: "ได้รับข้อมูลแล้วค่ะ กำลังดำเนินการให้นะคะ 💕" });
+      replyMessages.push({ type: "text", text: "ได้รับข้อมูลแล้วค่ะ น้องได้ส่งเรื่องให้หัวหน้าฝ่ายแก้ไขดำเนินการต่อให้เรียบร้อย รอสักครู่นะคะ 💕" });
       replyMessages.push({ type: "text", text: "✨ เล่น PGTHAI289 มั่นคง ปลอดภัย ฝากถอนออโต้เลยค่ะ!" });
       userPausedStates[userId] = true;
       return replyMessages;
@@ -214,19 +214,20 @@ export async function handleCustomerFlow(event) {
     }
   }
 
-  // Greeting if inactive > 10 min
+  // Greeting
   if (shouldGreet(userId)) {
     replyMessages.push({ type: "text", text: `สวัสดีค่ะ ${randomName()} 😊` });
     updateUserState(userId, { lastGreeted: Date.now() });
   }
 
-  // Normal message → Intent + GPT
+  // General Message
   if (event.type === "message") {
     if (shouldSendFlex(userId)) {
       updateUserState(userId, { lastFlexSent: Date.now() });
       replyMessages.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
     }
     replyMessages.push({ type: "text", text: await generateSmartReply(userText) });
+    console.log("📤 ส่งข้อความกลับไป LINE:", JSON.stringify(replyMessages, null, 2));
     return replyMessages;
   }
 
