@@ -364,13 +364,6 @@ function isDuplicateMessage(userId, text) {
   recentMessages[userId] = { text, time: now };
   return false;
 }
-
-export async function handleCustomerFlow(event) {
-  const userId = event.source?.userId;
-  const state = getUserState(userId);
-  const replyMessages = [];
-  const userText = event.message?.text?.trim() || "";
-
   // ✅ ป้องกันตอบซ้ำถ้าผู้ใช้ส่งข้อความเดิมภายใน 5 วิ
   if (isDuplicateMessage(userId, userText)) {
     console.log(`⏩ ข้อความซ้ำของ ${userId} ภายใน 5 วิ, ไม่ตอบซ้ำ`);
