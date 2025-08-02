@@ -7,11 +7,13 @@ import { getLineImage } from "../services/lineMediaService.js";
 const userStates = {};
 const userPausedStates = {};
 const flexCooldown = 2 * 60 * 60 * 1000;
+const greetCooldown = 10 * 60 * 1000; // 10 นาที
 
 function getUserState(userId) {
   if (!userStates[userId]) {
     userStates[userId] = {
       lastFlexSent: 0,
+      lastGreeted: 0,
       currentCase: null,
       caseData: {},
     };
@@ -28,17 +30,19 @@ function shouldSendFlex(userId) {
   return Date.now() - state.lastFlexSent > flexCooldown;
 }
 
-// ================== UTILITIES ==================
-function randomMaskedPhone() {
-  const prefix = "08";
-  const suffix = Math.floor(1000 + Math.random() * 9000);
-  return `${prefix}xxxx${suffix}`;
+function shouldGreet(userId) {
+  const state = getUserState(userId);
+  return Date.now() - state.lastGreeted > greetCooldown;
 }
 
-function randomTimeWithinLast30Min() {
-  const now = new Date();
-  const past = new Date(now.getTime() - Math.floor(Math.random() * 30 * 60000));
-  return `${String(past.getHours()).padStart(2, "0")}:${String(past.getMinutes()).padStart(2, "0")}`;
+// ================== UTILITIES ==================
+function randomMaskedPhone() {
+  return `08xxxx${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+function randomName() {
+  const names = ["คุณต้น", "คุณใหม่", "คุณก้อย", "คุณเอ็ม", "คุณปอนด์", "คุณบี", "คุณพีท", "คุณตั้ม"];
+  return names[Math.floor(Math.random() * names.length)];
 }
 
 async function notifyAdmin(event, message) {
@@ -104,7 +108,7 @@ async function analyzeUserIntent(text) {
   const prompt = `
 คุณคือระบบวิเคราะห์ Intent ของข้อความลูกค้า
 - ประเภท: "problem" (ปัญหา), "finance" (การเงิน), "register" (สมัคร), "general_question" (คำถามทั่วไป), "emotion" (อารมณ์)
-- ตอบ JSON เท่านั้น เช่น {"intent":"emotion","summary":"ลูกค้าหิว"}
+- ตอบ JSON เท่านั้น เช่น {"intent":"register","summary":"ลูกค้าต้องการสมัครสมาชิก"}
 ข้อความลูกค้า: "${text}"
 `;
   try {
@@ -118,18 +122,19 @@ async function analyzeUserIntent(text) {
 async function generateSmartReply(text) {
   const intent = await analyzeUserIntent(text);
   let prompt = "";
+
   if (intent.intent === "emotion")
     prompt = `ลูกค้ารู้สึก ${intent.summary} ตอบแบบเพื่อนคุย น่ารัก และแนะนำ pgthai289 เบาๆ`;
   else if (intent.intent === "general_question")
-    prompt = `ลูกค้าถาม ${intent.summary} ตอบสั้น กระชับ และชวนเล่น pgthai289`;
+    prompt = `ลูกค้าถาม ${intent.summary} ตอบแบบละเอียด กระชับ มีประโยชน์ และชวนเล่น pgthai289 เบาๆ`;
   else if (intent.intent === "register")
-    prompt = `ลูกค้าต้องการสมัครสมาชิก อธิบายขั้นตอนสมัคร pgthai289 แบบกระชับและสุภาพ`;
+    prompt = `ลูกค้าต้องการสมัครสมาชิก อธิบายขั้นตอนสมัคร pgthai289 แบบละเอียดและสุภาพ`;
   else if (intent.intent === "finance")
-    prompt = `ลูกค้าถามเรื่องการเงิน (${intent.summary}) ตอบวิธีฝากถอน pgthai289 ชัดเจน`;
+    prompt = `ลูกค้าสนใจเรื่องการเงิน (${intent.summary}) ตอบวิธีฝากถอน pgthai289 อย่างละเอียด`;
   else if (intent.intent === "problem")
     prompt = `ลูกค้ามีปัญหา (${intent.summary}) ตอบสุภาพ น่ารัก และบอกขั้นตอนแก้ปัญหา`;
   else
-    prompt = `ตอบข้อความนี้อย่างสุภาพ เป็นกันเอง และแนะนำ pgthai289 เบาๆ: "${text}"`;
+    prompt = `ตอบข้อความนี้อย่างสุภาพและมีประโยชน์ พร้อมชวนเล่น pgthai289 เบาๆ: "${text}"`;
 
   return await getCuteDynamicReply(prompt);
 }
@@ -155,19 +160,19 @@ export async function handleCustomerFlow(event) {
   const replyMessages = [];
   const userText = event.message?.text?.trim() || "";
 
-  // ถ้า pause อยู่ ต้องรอแอดมินปลด
+  // Check Pause State
   if (userPausedStates[userId]) {
     if (userText.includes("ดำเนินการให้เรียบร้อยแล้วนะคะพี่")) {
       userPausedStates[userId] = false;
       updateUserState(userId, { currentCase: null, caseData: {} });
       replyMessages.push({ type: "text", text: "น้องกลับมาดูแลพี่แล้วค่ะ 💕" });
     } else {
-      replyMessages.push({ type: "text", text: "รอแอดมินจริงช่วยดำนินการให้นะคะ 💕" });
+      replyMessages.push({ type: "text", text: "รอแอดมินจริงช่วยดำเนินการให้นะคะ 💕" });
     }
     return replyMessages;
   }
 
-  // ✅ Postback Handling
+  // Postback Handling
   if (event.type === "postback" && event.postback?.data) {
     const data = event.postback.data;
     replyMessages.push({ type: "text", text: `✅ คุณเลือก: ${data}` });
@@ -182,22 +187,23 @@ export async function handleCustomerFlow(event) {
 
     if (caseMap[data]) {
       updateUserState(userId, { currentCase: caseMap[data], caseData: {} });
-      let askText = "";
-      if (data === "register_admin") askText = "รบกวนแจ้งชื่อ-นามสกุล เบอร์โทร และบัญชี/วอเลท + ไลน์ไอดี ด้วยค่ะ 💕";
-      if (data === "login_backup") askText = "รบกวนแจ้งชื่อ+เบอร์โทรที่สมัครไว้ เดี๋ยวน้องจะตรวจสอบให้นะคะ 💕";
-      if (data === "issue_deposit") askText = "แจ้งชื่อ+เบอร์โทร และส่งสลิปฝากเงินด้วยค่ะ 💕";
-      if (data === "issue_withdraw") askText = "ระบบกำลังดำเนินการถอนให้ค่ะ รอ 3-5 นาที 💕";
-      if (data === "forgot_password") askText = "แจ้งชื่อ+เบอร์โทรที่สมัครไว้ เดี๋ยวน้องจะช่วยรีเซ็ตให้ค่ะ 💕";
-      if (data === "promo_info") askText = "ตอนนี้มีโปรสมัครใหม่ โปรฝากแรกของวัน และโปรคืนยอดเสีย สนใจโปรไหนคุยกับน้องได้เลยค่ะ 💕";
-      replyMessages.push({ type: "text", text: askText });
+      const askMap = {
+        register_admin: "รบกวนแจ้งชื่อ-นามสกุล เบอร์โทร และบัญชี/วอเลท + ไลน์ไอดี ด้วยค่ะ 💕",
+        login_backup: "รบกวนแจ้งชื่อ+เบอร์โทรที่สมัครไว้ เดี๋ยวน้องจะตรวจสอบให้นะคะ 💕",
+        issue_deposit: "แจ้งชื่อ+เบอร์โทร และส่งสลิปฝากเงินด้วยค่ะ 💕",
+        issue_withdraw: "ระบบกำลังดำเนินการถอนให้ค่ะ รอ 3-5 นาที 💕",
+        forgot_password: "แจ้งชื่อ+เบอร์โทรที่สมัครไว้ เดี๋ยวน้องจะช่วยรีเซ็ตให้ค่ะ 💕",
+        promo_info: "ตอนนี้มีโปรสมัครใหม่ โปรฝากแรกของวัน และโปรคืนยอดเสีย สนใจโปรไหนคุยกับน้องได้เลยค่ะ 💕",
+      };
+      replyMessages.push({ type: "text", text: askMap[data] || "เดี๋ยวน้องจะดูแลให้เลยค่ะ 💕" });
       return replyMessages;
     }
   }
 
-  // ✅ ถ้ามี currentCase และลูกค้าส่งข้อมูล
-  if (state.currentCase && !userPausedStates[userId]) {
-    if (userText.length > 5) {
-      await notifyAdmin(event, `ข้อมูลจากลูกค้า (เคส ${state.currentCase}): ${userText}`);
+  // If currentCase exists → wait for info
+  if (state.currentCase) {
+    if (userText.length > 5 || event.message?.type === "image") {
+      await notifyAdmin(event, `ข้อมูลจากลูกค้า (เคส ${state.currentCase}): ${userText || "ส่งรูป"}`);
       replyMessages.push({ type: "text", text: "ได้รับข้อมูลแล้วค่ะ กำลังดำเนินการให้นะคะ 💕" });
       replyMessages.push({ type: "text", text: "✨ เล่น PGTHAI289 มั่นคง ปลอดภัย ฝากถอนออโต้เลยค่ะ!" });
       userPausedStates[userId] = true;
@@ -208,21 +214,25 @@ export async function handleCustomerFlow(event) {
     }
   }
 
-  // ✅ ข้อความทั่วไป → Intent + GPT
+  // Greeting if inactive > 10 min
+  if (shouldGreet(userId)) {
+    replyMessages.push({ type: "text", text: `สวัสดีค่ะ ${randomName()} 😊` });
+    updateUserState(userId, { lastGreeted: Date.now() });
+  }
+
+  // Normal message → Intent + GPT
   if (event.type === "message") {
     if (shouldSendFlex(userId)) {
       updateUserState(userId, { lastFlexSent: Date.now() });
       replyMessages.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
     }
-    const gptReply = await generateSmartReply(userText);
-    replyMessages.push({ type: "text", text: gptReply });
+    replyMessages.push({ type: "text", text: await generateSmartReply(userText) });
     return replyMessages;
   }
 
   return replyMessages;
 }
 
-// (ฟังก์ชัน createFlexMenuContents เดิมของคุณคงไว้)
 function createFlexMenuContents() {
-  return { type: "carousel", contents: [] }; // ใส่ flex menu เดิมของคุณที่นี่
+  return { type: "carousel", contents: [] }; // ใส่ flex menu เดิมของคุณ
 }
