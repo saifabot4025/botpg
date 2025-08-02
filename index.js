@@ -2,7 +2,7 @@ import express from "express";
 import crypto from "crypto";
 import dotenv from "dotenv";
 import { handleLineEvent } from "./controllers/lineController.js";
-import { initCRM } from "./utils/crmManager.js";
+import { initCRM } from "./utils/crmManager.js"; // ✅ เพิ่มระบบ CRM
 import line from "@line/bot-sdk";
 
 dotenv.config();
@@ -69,7 +69,7 @@ const lineConfig = {
 };
 const lineClient = new line.Client(lineConfig);
 
-// ✅ เริ่มระบบ CRM
+// ✅ เริ่มระบบ CRM (ติดตามลูกค้า + Follow-Up อัตโนมัติ)
 initCRM(lineClient);
 
 // ✅ Start Server
