@@ -84,9 +84,20 @@ async function generateMaxWithdrawMessage() {
   const today = new Date().toLocaleDateString("th-TH");
   if (!global.cachedDate || global.cachedDate !== today) {
     global.cachedDate = today;
-    global.cachedName = await getRandomName();
-    global.cachedAmt = Math.floor(Math.random()*200000)+300000;
+
+    // ✅ ไม่เรียก GPT แต่สุ่มจาก Array ที่กำหนดเอง
+    const names = ["กิตติ", "สมชาย", "ณัฐพล", "ธีรภัทร", "จักรพงศ์","ปิยะ", "อาทิตย์", "ชยพล", "ภาณุ", "สุรศักดิ์", "วิชัย", "ณรงค์", "กมล", "อนันต์", "ประเสริฐ","พรชัย", "สกล", "พงษ์ศักดิ์", "ชัยวัฒน์", "สมบัติ", "สุพรรณ", "ปรีชา", "สมพงษ์", "วิทยา", "วรพล",
+  "สุภาวดี", "กมลวรรณ", "พัชราภา", "ปวีณา", "สุภาวรรณ",
+  "นภัสสร", "กัญญารัตน์", "ปาริชาติ", "อรอนงค์", "จันทร์เพ็ญ",
+  "ธิดารัตน์", "สุธาสินี", "พิมพ์ชนก", "อารยา", "วราภรณ์",
+  "สุวรรณา", "ศิริพร", "อัญชลี", "รัชนีกร", "ภัทรพร",
+  "พัชรี", "มนัสวี", "สายพิณ", "รัตนาภรณ์", "ดวงกมล"
+];
+    global.cachedName = names[Math.floor(Math.random() * names.length)];
+
+    global.cachedAmt = Math.floor(Math.random() * 200000) + 300000;
   }
+
   return `👑 ยอดถอนสูงสุดวันนี้\n\nยินดีกับคุณ "${global.cachedName}" ยูส ${randomMaskedPhone()} ถอน ${global.cachedAmt.toLocaleString()} บาท\nวันที่ ${today}`;
 }
 
@@ -167,7 +178,7 @@ function createFlexMenuContents() {
             {
               type: "button",
               style: "primary",
-              color: "#FFFFFF", // ปุ่มขาว
+              color: "#000000", // ปุ่มขาว
               action: {
                 type: "uri",
                 label: "⭐ สมัครเอง",
@@ -183,7 +194,7 @@ function createFlexMenuContents() {
             {
               type: "button",
               style: "primary",
-              color: "#FFFFFF",
+              color: "#000000",
               action: {
                 type: "uri",
                 label: "🔑 ทางเข้าเล่นหลัก",
@@ -235,7 +246,7 @@ function createFlexMenuContents() {
             {
               type: "button",
               style: "primary",
-              color: "#FFFFFF",
+              color: "#000000",
               action: { type: "postback", label: "💰 ปัญหาฝาก/ถอน", data: "issue_deposit" },
             },
             {
@@ -247,7 +258,7 @@ function createFlexMenuContents() {
             {
               type: "button",
               style: "primary",
-              color: "#FFFFFF",
+              color: "#000000",
               action: { type: "postback", label: "🚪 เข้าเล่นไม่ได้", data: "login_backup" },
             },
             {
@@ -295,7 +306,7 @@ function createFlexMenuContents() {
             {
               type: "button",
               style: "primary",
-              color: "#FFFFFF",
+              color: "#000000",
               action: { type: "postback", label: "⭐ รีวิวถอนล่าสุด", data: "review_withdraw" },
             },
             {
@@ -307,7 +318,7 @@ function createFlexMenuContents() {
             {
               type: "button",
               style: "primary",
-              color: "#FFFFFF",
+              color: "#000000",
               action: { type: "postback", label: "🎮 เกมแตกบ่อย", data: "top_game" },
             },
             {
@@ -322,7 +333,14 @@ function createFlexMenuContents() {
     ],
   };
 }
+function limitSentences(text, maxSentences = 2) {
+  const sentences = text.split(/(?<=[.!?])\s+/); // ตัดตาม ., !, ?
+  return sentences.slice(0, maxSentences).join(" ");
+}
 
+function sanitizeReply(reply, assistantName) {
+  return reply.replace(/น้อง[^\s]+/g, assistantName); // ถ้า GPT ตอบชื่อผิดจะถูกแทนด้วย assistantName
+}
 /* ================== MAIN FLOW ================== */
 export async function handleCustomerFlow(event){
   const userId=event.source?.userId;
@@ -389,17 +407,62 @@ export async function handleCustomerFlow(event){
     reply.push({type:"flex",altText:"🎀 เมนูพิเศษ",contents:createFlexMenuContents()});
     updateUserState(userId,{lastFlexSent:Date.now()});
   }
+const assistantNames = ["น้องฟาง", "น้องปุย", "น้องแพรว", "น้องมายด์", "น้องบัว", "น้องน้ำหวาน", "น้องแพม", "น้องจ๋า"];
 
-  try{
-    const gptReply=await getCuteDynamicReply(`ลูกค้าพูดว่า: "${text}"\nตอบแบบเพื่อนคุยน่ารัก อ้อนๆ มืออาชีพ แนะนำเล่น PGTHAI289`);
-    reply.push({type:"text",text:gptReply});
-    await notifyAdmin(event,text||"ลูกค้าส่งข้อความ/รูป");
-    return reply;
-  }catch(err){
-    reply.push({type:"text",text:"เกิดข้อผิดพลาด กรุณาลองใหม่ค่ะ 💕"});
-    return reply;
-  }
+function getRandomAssistantName() {
+  return assistantNames[Math.floor(Math.random() * assistantNames.length)];
 }
+
+const now = Date.now();
+if (!state.assistantName || now - state.lastGreeted > 10 * 60 * 1000 || event.type === "follow") {
+  const newName = getRandomAssistantName();
+  updateUserState(userId, { assistantName: newName, lastGreeted: now });
+}
+const assistantName = state.assistantName;
+
+try {
+const tooSoon = Date.now() - state.lastGreeted < 10 * 60 * 1000;
+
+   const gptReply = await getCuteDynamicReply(
+  `บทบาท: เป็นแอดมินผู้หญิงชื่อ ${assistantName} ของ PGTHAI289 พูดสั้นๆ กระชับ น่ารัก อ้อนๆ เป็นกันเอง มืออาชีพ
+ข้อความจากลูกค้า: "${text}"
+สิ่งที่ต้องทำ:
+- ใช้สรรพนามแทนตัวเองว่า "${assistantName}" หรือ "น้อง" เท่านั้น
+- ใช้คำพูดแบบผู้หญิง เช่น "ค่ะ", "นะคะ", "จ้า", "น้า" ห้ามใช้ "ครับ"
+- ห้ามเปลี่ยนชื่อผู้พูดเป็นคนอื่น
+- ตอบตรงๆ แบบน่ารัก อ้อนๆ ไม่เกิน 2 ประโยค
+- ถ้าลูกค้าถามโปร ให้ตอบสั้นๆ และชวนกดปุ่ม Flex Menu
+- ${
+      tooSoon
+        ? "ห้ามเริ่มด้วยคำว่าสวัสดีเพราะเพิ่งคุยกันไป"
+        : "สามารถเริ่มด้วยคำว่าสวัสดีได้"
+    }
+- ถ้าเป็นคำถามทั่วไป ให้ตอบช่วยเหลือและแนะนำเว็บ PGTHAI289`
+);
+
+// ✅ ตรงนี้ถึงจะใส่ push
+reply.push({
+  type: "text",
+  text: sanitizeReply(limitSentences(gptReply), assistantName),
+});
+
+// ✅ เก็บประวัติแชท
+state.chatHistory.push({ role: "assistant", content: gptReply });
+updateUserState(userId, state);
+
+  // ✅ ถ้า GPT ตอบขึ้นต้นด้วย "สวัสดี" → บันทึกเวลา
+  if (gptReply.trim().startsWith("สวัสดี")) {
+    updateUserState(userId, { lastGreeted: Date.now() });
+  }
+
+  await notifyAdmin(event, text || "ลูกค้าส่งข้อความ/รูป");
+  return reply;
+
+} catch (err) {
+  reply.push({ type: "text", text: "ขอโทษนะคะ รบกวนส่งแชทให้แอดมินใหม่อีกรอบหน่อยจ้า 💕" });
+  return reply;
+}
+
 /* ================== CRM FOLLOW-UP (3,7,15,30 วัน) ================== */
 export function initCRM(lineClient) {
   setInterval(async () => {
