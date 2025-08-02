@@ -4,16 +4,16 @@ import { getCuteDynamicReply } from "../services/gptService.js";
 import { sendTelegramAlert, sendTelegramPhoto, getLineProfile } from "../services/telegramService.js";
 import { getLineImage } from "../services/lineMediaService.js";
 
+// ================== STATE ==================
 const userStates = {};
 const userPausedStates = {};
 const flexCooldown = 2 * 60 * 60 * 1000;
-const greetCooldown = 10 * 60 * 1000; // 10 นาที
+const lastGreetingTimes = {};
 
 function getUserState(userId) {
   if (!userStates[userId]) {
     userStates[userId] = {
       lastFlexSent: 0,
-      lastGreeted: 0,
       currentCase: null,
       caseData: {},
     };
@@ -30,11 +30,16 @@ function shouldSendFlex(userId) {
   return Date.now() - state.lastFlexSent > flexCooldown;
 }
 
-function shouldGreet(userId) {
-  const state = getUserState(userId);
-  return Date.now() - state.lastGreeted > greetCooldown;
+function shouldSendGreeting(userId) {
+  const now = Date.now();
+  if (!lastGreetingTimes[userId] || now - lastGreetingTimes[userId] > 10 * 60 * 1000) {
+    lastGreetingTimes[userId] = now;
+    return true;
+  }
+  return false;
 }
 
+// ================== UTILITIES ==================
 function randomMaskedPhone() {
   const prefix = "08";
   const suffix = Math.floor(1000 + Math.random() * 9000);
@@ -46,7 +51,9 @@ async function notifyAdmin(event, message) {
     const profile = await getLineProfile(event.source?.userId);
     const displayName = profile?.displayName || event.source?.userId || "ไม่ทราบชื่อ";
     const oaName = process.env.LINE_OA_NAME || "ไม่ทราบ OA";
-    await sendTelegramAlert(`📢 แจ้งเตือนจาก ${oaName}\n👤 ลูกค้า: ${displayName}\n💬 ข้อความ: ${message}`);
+    await sendTelegramAlert(`📢 แจ้งเตือนจาก ${oaName}
+👤 ลูกค้า: ${displayName}
+💬 ข้อความ: ${message}`);
     if (event.message?.type === "image") {
       const img = await getLineImage(event.message.id);
       if (img) await sendTelegramPhoto(img, `📷 รูปจากลูกค้า (${displayName})`);
@@ -56,6 +63,7 @@ async function notifyAdmin(event, message) {
   }
 }
 
+// ================== STATIC MESSAGES ==================
 let cachedMaxWithdrawDate = null;
 let cachedMaxWithdrawAmount = null;
 
@@ -66,7 +74,9 @@ async function generateWithdrawReviewMessage() {
     const amount = (Math.floor(Math.random() * 45000) + 5000).toLocaleString();
     list.push(`ยูส ${phone} ถอน ${amount}`);
   }
-  return `📊 รีวิวการถอนล่าสุด\n\n${list.join("\n")}`;
+  return `📊 รีวิวการถอนล่าสุด
+
+${list.join("\n")}`;
 }
 
 async function generateMaxWithdrawMessage() {
@@ -79,7 +89,23 @@ async function generateMaxWithdrawMessage() {
 }
 
 async function generateTopGameMessage() {
-  const games = ["สาวถ้ำ","กิเลน","Lucky Neko","Fortune Ox","Dragon Hatch","Fortune Rabbit"];
+  const games = [
+    "Graffiti Rush • กราฟฟิตี้ รัช",
+    "Treasures of Aztec • สาวถ้ำ",
+    "Fortune Ox • วัวโดด",
+    "Fortune Snake • งู",
+    "Fortune Rabbit • เกมกระต่าย",
+    "Lucky Neko • ลัคกี้ เนโกะ แมว",
+    "Fortune Mouse • เกมหนูสามแถว",
+    "Dragon Hatch • เกมมังกร",
+    "Wild Bounty Showdown • คาวบอย",
+    "Ways of the Qilin • กิเลน",
+    "Galaxy Miner • อวกาศพาโชค",
+    "Incan Wonders • สัญลักษณ์ชนเผ่า",
+    "Diner Frenzy Spins • อาหารมั่งคั่ง",
+    "Dragon's Treasure Quest • มังกรซ่อนสมบัติ",
+    "Jack the Giant Hunter • แจ็กผู้ฆ่ายัก"
+  ];
   const selected = games.sort(() => 0.5 - Math.random()).slice(0, 5);
   let msg = "🎲 เกมสล็อตแตกบ่อยวันนี้\n\n";
   selected.forEach((g, i) => (msg += `${i + 1}. ${g} - ${Math.floor(Math.random() * 50) + 50}%\n`));
@@ -98,10 +124,11 @@ async function generateReferralCommissionMessage() {
   return `🤝 ค่าคอมมิชชั่นแนะนำเพื่อน\n\n${list.join("\n")}\n\n💡 ชวนเพื่อนมาสร้างรายได้ง่ายๆ ได้ทุกวัน!`;
 }
 
+// ================== GPT INTENT ==================
 async function analyzeUserIntent(text) {
   const prompt = `
 คุณคือระบบวิเคราะห์ Intent ของข้อความลูกค้า
-- ประเภท: "problem", "finance", "register", "general_question", "emotion"
+- ประเภท: "problem" (ปัญหา), "finance" (การเงิน), "register" (สมัคร), "general_question" (คำถามทั่วไป), "emotion" (อารมณ์)
 - ตอบ JSON เท่านั้น เช่น {"intent":"emotion","summary":"ลูกค้าหิว"}
 ข้อความลูกค้า: "${text}"
 `;
@@ -132,6 +159,7 @@ async function generateSmartReply(text) {
   return await getCuteDynamicReply(prompt);
 }
 
+// ================== POSTBACK MAP ==================
 const caseMap = {
   register_admin: "register_admin",
   login_backup: "login_backup",
@@ -145,28 +173,105 @@ const caseMap = {
   referral_commission: "referral_commission",
 };
 
+// ================== FLEX MENU ==================
+function createFlexMenuContents() {
+  return {
+    type: "carousel",
+    contents: [
+      {
+        type: "bubble",
+        hero: { type: "image", url: "https://i.ibb.co/SqbNcr1/image.jpg", size: "full", aspectRatio: "20:13", aspectMode: "cover" },
+        body: {
+          type: "box",
+          layout: "vertical",
+          contents: [
+            { type: "text", text: "💎 สมัคร + Login", weight: "bold", size: "lg", color: "#8E44AD" },
+            { type: "text", text: "สมัครง่าย มั่นคง จ่ายจริง 💵", size: "sm", color: "#4A235A", margin: "sm" },
+          ],
+        },
+        footer: {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          contents: [
+            { type: "button", style: "primary", color: "#8E44AD", action: { type: "uri", label: "✨ สมัครเอง", uri: "https://pgthai289.net/customer/register/LINEBOT/?openExternalBrowser=1" } },
+            { type: "button", style: "primary", color: "#8E44AD", action: { type: "postback", label: "🤍 ให้เจ้าหน้าที่สมัครให้", data: "register_admin" } },
+          ],
+        },
+      },
+      {
+        type: "bubble",
+        hero: { type: "image", url: "https://i.ibb.co/SqbNcr1/image.jpg", size: "full", aspectRatio: "20:13", aspectMode: "cover" },
+        body: {
+          type: "box",
+          layout: "vertical",
+          contents: [
+            { type: "text", text: "🛠 แจ้งปัญหา", weight: "bold", size: "lg", color: "#8E44AD" },
+            { type: "text", text: "ฝาก ถอน เข้าเล่นไม่ได้ กดด้านล่างเลยค่ะ", size: "sm", color: "#4A235A", margin: "sm" },
+          ],
+        },
+        footer: {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          contents: [
+            { type: "button", style: "primary", color: "#8E44AD", action: { type: "postback", label: "💰 ปัญหาฝาก/ถอน", data: "issue_deposit" } },
+            { type: "button", style: "primary", color: "#8E44AD", action: { type: "postback", label: "🔑 ลืมรหัสผ่าน", data: "forgot_password" } },
+          ],
+        },
+      },
+      {
+        type: "bubble",
+        hero: { type: "image", url: "https://i.ibb.co/SqbNcr1/image.jpg", size: "full", aspectRatio: "20:13", aspectMode: "cover" },
+        body: {
+          type: "box",
+          layout: "vertical",
+          contents: [
+            { type: "text", text: "🏆 รีวิว & เกมแตก", weight: "bold", size: "lg", color: "#8E44AD" },
+            { type: "text", text: "ดูรีวิวยอดถอน และเกมแตกบ่อย", size: "sm", color: "#4A235A", margin: "sm" },
+          ],
+        },
+        footer: {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          contents: [
+            { type: "button", style: "primary", color: "#8E44AD", action: { type: "postback", label: "💵 รีวิวยอดถอน", data: "review_withdraw" } },
+            { type: "button", style: "primary", color: "#8E44AD", action: { type: "postback", label: "👑 ถอนสูงสุดวันนี้", data: "max_withdraw" } },
+            { type: "button", style: "primary", color: "#8E44AD", action: { type: "postback", label: "🎲 เกมแตกบ่อย", data: "top_game" } },
+            { type: "button", style: "primary", color: "#8E44AD", action: { type: "postback", label: "🤝 ค่าคอมเพื่อน", data: "referral_commission" } },
+          ],
+        },
+      },
+    ],
+  };
+}
+
+// ================== HANDLE FLOW ==================
 export async function handleCustomerFlow(event) {
   const userId = event.source?.userId;
   const state = getUserState(userId);
   const replyMessages = [];
   const userText = event.message?.text?.trim() || "";
 
+  // Pause check
   if (userPausedStates[userId]) {
     if (userText.includes("ดำเนินการให้เรียบร้อยแล้วนะคะพี่")) {
       userPausedStates[userId] = false;
       updateUserState(userId, { currentCase: null, caseData: {} });
       replyMessages.push({ type: "text", text: "น้องกลับมาดูแลพี่แล้วค่ะ 💕" });
     } else {
-      replyMessages.push({ type: "text", text: "ขณะนี้หัวหน้าฝ่ายกำลังดูแลเคสของพี่อยู่ รอสักครู่นะคะ 💕" });
+      replyMessages.push({ type: "text", text: "ตอนนี้อยู่ในขั้นตอนการดำเนินการโดยหัวหน้าฝ่ายแก้ไข รอสักครู่ค่ะ 💕" });
     }
     return replyMessages;
   }
 
+  // Postback
   if (event.type === "postback" && event.postback?.data) {
     const data = event.postback.data;
     replyMessages.push({ type: "text", text: `✅ คุณเลือก: ${data}` });
 
-    if (["review_withdraw","max_withdraw","top_game","referral_commission"].includes(data)) {
+    if (["review_withdraw", "max_withdraw", "top_game", "referral_commission"].includes(data)) {
       if (data === "review_withdraw") replyMessages.push({ type: "text", text: await generateWithdrawReviewMessage() });
       if (data === "max_withdraw") replyMessages.push({ type: "text", text: await generateMaxWithdrawMessage() });
       if (data === "top_game") replyMessages.push({ type: "text", text: await generateTopGameMessage() });
@@ -188,10 +293,11 @@ export async function handleCustomerFlow(event) {
     }
   }
 
+  // Current Case Handling
   if (state.currentCase && !userPausedStates[userId]) {
     if (userText.length > 5 || event.message?.type === "image") {
-      await notifyAdmin(event, `ข้อมูลจากลูกค้า (เคส ${state.currentCase}): ${userText || "ส่งรูปภาพ"}`);
-      replyMessages.push({ type: "text", text: "ได้รับข้อมูลแล้วค่ะ กำลังส่งให้หัวหน้าฝ่ายดูแล ดำเนินการสักครู่ค่ะ 💕" });
+      await notifyAdmin(event, `ข้อมูลจากลูกค้า (เคส ${state.currentCase}): ${userText}`);
+      replyMessages.push({ type: "text", text: "ได้รับข้อมูลแล้วค่ะ กำลังส่งให้หัวหน้าฝ่ายแก้ไขดำเนินการ 💕" });
       replyMessages.push({ type: "text", text: "✨ เล่น PGTHAI289 มั่นคง ปลอดภัย ฝากถอนออโต้เลยค่ะ!" });
       userPausedStates[userId] = true;
       return replyMessages;
@@ -201,16 +307,14 @@ export async function handleCustomerFlow(event) {
     }
   }
 
+  // General Messages
   if (event.type === "message") {
+    if (shouldSendGreeting(userId)) {
+      replyMessages.push({ type: "text", text: `สวัสดีค่ะ คุณ${["พีท","ฟาง","ตาล","บอส","แนน","ก้อง"][Math.floor(Math.random()*6)]} 😊` });
+    }
     if (shouldSendFlex(userId)) {
       updateUserState(userId, { lastFlexSent: Date.now() });
       replyMessages.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
-    }
-    if (shouldGreet(userId)) {
-      const names = ["คุณพีท","คุณฟาง","คุณเบน","คุณมาย"];
-      const name = names[Math.floor(Math.random() * names.length)];
-      replyMessages.push({ type: "text", text: `สวัสดีค่ะ ${name} 😊` });
-      updateUserState(userId, { lastGreeted: Date.now() });
     }
     const gptReply = await generateSmartReply(userText);
     replyMessages.push({ type: "text", text: gptReply });
@@ -218,36 +322,4 @@ export async function handleCustomerFlow(event) {
   }
 
   return replyMessages;
-}
-
-function createFlexMenuContents() {
-  return {
-    type: "carousel",
-    contents: [
-      {
-        type: "bubble",
-        hero: { type: "image", url: "https://i.ibb.co/SqbNcr1/image.jpg", size: "full", aspectRatio: "20:13", aspectMode: "cover" },
-        body: { type: "box", layout: "vertical", contents: [
-          { type: "text", text: "💎 สมัคร + Login", weight: "bold", size: "lg", color: "#8E44AD" },
-          { type: "text", text: "🎀 สมัครง่าย ๆ กดปุ่มด้านล่าง", size: "sm", color: "#4A235A", margin: "sm" }
-        ]},
-        footer: { type: "box", layout: "vertical", contents: [
-          { type: "button", style: "primary", color: "#8E44AD", action: { type: "uri", label: "✨ สมัครเอง", uri: "https://pgthai289.net/customer/register/LINEBOT/?openExternalBrowser=1" }},
-          { type: "button", style: "primary", color: "#8E44AD", action: { type: "postback", label: "🤍 ให้ช่วยสมัคร", data: "register_admin" }}
-        ]}
-      },
-      {
-        type: "bubble",
-        hero: { type: "image", url: "https://i.ibb.co/SqbNcr1/image.jpg", size: "full", aspectRatio: "20:13", aspectMode: "cover" },
-        body: { type: "box", layout: "vertical", contents: [
-          { type: "text", text: "🛠 แจ้งปัญหา", weight: "bold", size: "lg", color: "#8E44AD" },
-          { type: "text", text: "หากพบปัญหา กดปุ่มที่ต้องการแจ้งได้เลยนะคะ 💬", size: "sm", color: "#4A235A", margin: "sm" }
-        ]},
-        footer: { type: "box", layout: "vertical", contents: [
-          { type: "button", style: "primary", color: "#8E44AD", action: { type: "postback", label: "💰 ปัญหาฝาก/ถอน", data: "issue_deposit" }},
-          { type: "button", style: "primary", color: "#8E44AD", action: { type: "postback", label: "🔑 ลืมรหัสผ่าน", data: "forgot_password" }}
-        ]}
-      }
-    ]
-  };
 }
