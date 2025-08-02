@@ -81,7 +81,7 @@ async function generateWithdrawReviewMessage() {
 }
 
 async function generateMaxWithdrawMessage() {
-  const today = new Date().toLocaleDateString("th-TH");
+  const today = new Date().toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok" });
   if (!global.cachedDate || global.cachedDate !== today) {
     global.cachedDate = today;
 
@@ -417,29 +417,32 @@ const now = Date.now();
 if (!state.assistantName || now - state.lastGreeted > 10 * 60 * 1000 || event.type === "follow") {
   const newName = getRandomAssistantName();
   updateUserState(userId, { assistantName: newName, lastGreeted: now });
+  state.assistantName = newName; // ✅ อัปเดต state ใน memory ด้วย
 }
 const assistantName = state.assistantName;
 
 try {
 const tooSoon = Date.now() - state.lastGreeted < 10 * 60 * 1000;
 
-   const gptReply = await getCuteDynamicReply(
-  `บทบาท: เป็นแอดมินผู้หญิงชื่อ ${assistantName} ของ PGTHAI289 พูดสั้นๆ กระชับ น่ารัก อ้อนๆ เป็นกันเอง มืออาชีพ
+  const gptReply = await getCuteDynamicReply(
+`บทบาท: เป็นแอดมินผู้หญิงชื่อ ${assistantName} ของ PGTHAI289 พูดสั้นๆ กระชับ น่ารัก อ้อนๆ เป็นกันเอง มืออาชีพ
 ข้อความจากลูกค้า: "${text}"
-สิ่งที่ต้องทำ:
-- ใช้สรรพนามแทนตัวเองว่า "${assistantName}" หรือ "น้อง" เท่านั้น
-- ใช้คำพูดแบบผู้หญิง เช่น "ค่ะ", "นะคะ", "จ้า", "น้า" ห้ามใช้ "ครับ"
-- ห้ามเปลี่ยนชื่อผู้พูดเป็นคนอื่น
-- ตอบตรงๆ แบบน่ารัก อ้อนๆ ไม่เกิน 2 ประโยค
-- ถ้าลูกค้าถามโปร ให้ตอบสั้นๆ และชวนกดปุ่ม Flex Menu
-- ${
-      tooSoon
-        ? "ห้ามเริ่มด้วยคำว่าสวัสดีเพราะเพิ่งคุยกันไป"
-        : "สามารถเริ่มด้วยคำว่าสวัสดีได้"
-    }
-- ถ้าเป็นคำถามทั่วไป ให้ตอบช่วยเหลือและแนะนำเว็บ PGTHAI289`
-);
 
+วิธีการตอบ:
+1. ตอบแบบเข้าใจความรู้สึกและแก้ปัญหาหรือให้กำลังใจกับสิ่งที่ลูกค้าพิมพ์มาก่อน
+2. ค่อยโยงแบบเนียนๆ ไปที่การชวนมาเล่นเว็บ PGTHAI289 โดยใช้คำพูดอ้อนๆ และน่ารัก
+3. ใช้สรรพนาม "${assistantName}" หรือ "น้อง" เท่านั้น
+4. ใช้คำพูดแบบผู้หญิง เช่น "ค่ะ", "นะคะ", "จ้า", "น้า" ห้ามใช้ "ครับ"
+5. ห้ามเปลี่ยนชื่อผู้พูดเป็นคนอื่น
+6. ตอบไม่เกิน 2 ประโยค
+7. ถ้าลูกค้าถามโปร ให้ตอบสั้นๆ และชวนกดปุ่ม Flex Menu
+- ${
+  tooSoon
+    ? "ห้ามเริ่มด้วยคำว่าสวัสดีเพราะเพิ่งคุยกันไป"
+    : "สามารถเริ่มด้วยคำว่าสวัสดีได้"
+}
+`
+);
 // ✅ ตรงนี้ถึงจะใส่ push
 reply.push({
   type: "text",
