@@ -247,25 +247,6 @@ export async function handleCustomerFlow(event){
     return reply;
   }
 }
-
-/* ================== CRM ================== */
-export function initCRM(lineClient){
-  setInterval(async()=>{
-    const now=Date.now();
-    const inactive=Object.keys(userStates).filter(uid=>now-(userStates[uid]?.lastActive||0)>3*24*60*60*1000);
-    for(const uid of inactive){
-      try{
-        const follow=await getCuteDynamicReply("สร้างข้อความน่ารัก ชวนลูกค้าที่หายไป 3 วัน กลับมาเล่น PGTHAI289 แบบมืออาชีพ");
-        await lineClient.pushMessage(uid,{type:"text",text:follow});
-        await lineClient.pushMessage(uid,{type:"flex",altText:"🎀 กลับมาเล่นกับเรา 🎀",contents:createFlexMenuContents()});
-        await sendTelegramAlert(`📢 CRM ส่งข้อความหา: ${uid}`);
-        updateUserState(uid,{lastActive:Date.now()});
-      }catch(err){ console.error("CRM error:",err); }
-    }
-  },6*60*60*1000);
-}
-
-
 /* ================== CRM FOLLOW-UP (3,7,15,30 วัน) ================== */
 export function initCRM(lineClient) {
   setInterval(async () => {
