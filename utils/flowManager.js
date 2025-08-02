@@ -367,7 +367,6 @@ function isDuplicateMessage(userId, text) {
   // ✅ ป้องกันตอบซ้ำถ้าผู้ใช้ส่งข้อความเดิมภายใน 5 วิ
   if (isDuplicateMessage(userId, userText)) {
     console.log(`⏩ ข้อความซ้ำของ ${userId} ภายใน 5 วิ, ไม่ตอบซ้ำ`);
-    return [];
   }
 
   // ✅ ถ้าบอทถูก pause → ต้องรอหัวหน้าฝ่ายแก้ไขปลดล็อก
