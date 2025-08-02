@@ -152,6 +152,11 @@ async function generateReferralCommissionMessage() {
   return `🤝 ค่าคอมมิชชั่นแนะนำเพื่อน\n\n${lines.join("\n")}\n\nชวนมาสร้างรายได้ด้วยกันง่ายๆ สอบถามได้ที่แอดมินค่ะ 💕`;
 }
 
+// ฟังก์ชันช่วยส่ง echo ข้อความลูกค้ากด postback ให้ลูกค้าเห็นในแชท
+function pushEchoPostbackMessage(replyMessages, postbackData) {
+  replyMessages.push({ type: "text", text: `คุณพิมพ์: ${postbackData}` });
+}
+
 // main flow
 export async function handleCustomerFlow(event) {
   const userId = event.source?.userId;
@@ -241,6 +246,9 @@ export async function handleCustomerFlow(event) {
   if (event.type === "postback" && event.postback?.data) {
     const data = event.postback.data;
 
+    // ส่ง echo ข้อความลูกค้ากดปุ่มให้ขึ้นในแชท (แก้ปัญหาข้อความหาย)
+    pushEchoPostbackMessage(replyMessages, data);
+
     // กำหนดเคสตามปุ่มที่กด
     const caseMap = {
       register_admin: "register_admin",
@@ -253,21 +261,11 @@ export async function handleCustomerFlow(event) {
       max_withdraw: "max_withdraw",
       top_game: "top_game",
       referral_commission: "referral_commission",
-      close_case: "close_case", // เคสปิดเคส
+      // close_case: "close_case", // ปิดเคสยกเลิกตามคำขอ
     };
 
     if (caseMap[data]) {
-      updateUserState(userId, { currentCase: caseMap[data], caseData: {} });
-
-      // หากเป็นปิดเคส แจ้งแอดมินว่าใช้เวลากี่นาที
-      if (data === "close_case") {
-        const caseStart = state.caseData.startTime || Date.now();
-        const durationMs = Date.now() - caseStart;
-        const durationMin = Math.round(durationMs / 60000);
-        await sendTelegramAlert(`✅ แอดมินปิดเคสลูกค้าใช้เวลา ${durationMin} นาที`);
-        updateUserState(userId, { currentCase: null, caseData: {} });
-        return [{ type: "text", text: `ขอบคุณค่ะ เคสถูกปิดเรียบร้อย ใช้เวลาประมาณ ${durationMin} นาที` }];
-      }
+      updateUserState(userId, { currentCase: caseMap[data], caseData: { startTime: Date.now() } });
     }
 
     // ส่งข้อความเริ่มต้นเคสและโปรโมทเว็บด้วย GPT
@@ -319,10 +317,52 @@ export async function handleCustomerFlow(event) {
       updateUserState(userId, { lastFlexSent: Date.now() });
     }
 
-    // GPT ตอบแบบน่ารัก อ้อนชวนลูกค้า
-    let gptReply = "";
+    // เช็คถ้าเคสกำลังรอข้อมูลเฉพาะ (caseData.receivedInfo = true) แล้วลูกค้าพิมพ์ข้อความที่ไม่เกี่ยวกับเคส ให้ตอบ GPT แบบยืดหยุ่นก่อน แล้วค่อยเตือนส่งข้อมูลต่อ
+    if (state.currentCase && state.caseData.receivedInfo && !["issue_deposit"].includes(state.currentCase)) {
+      // ในเคส issue_deposit จะจัดการแยกอยู่แล้ว ไม่ให้ตอบ GPT ตรงนี้
+    } else if (state.currentCase && state.caseData.receivedInfo) {
+      // เคสที่รอข้อมูลลูกค้า เช่น login_backup หรือ forgot_password หรือ register_admin (แต่ไม่ใช่ issue_deposit)
+      try {
+        let gptReply = await getCuteDynamicReply(
+          `ตอบแบบน่ารัก อ้อนๆ ชวนเล่นเว็บ pgthai289 พร้อมบอกลูกค้าให้ส่งข้อมูลต่อ: "${userText}"`
+        );
+        replyMessages.push({ type: "text", text: gptReply });
+        replyMessages.push({ type: "text", text: "รบกวนส่งข้อมูลตามที่แจ้งไว้ก่อนนะคะ เพื่อที่น้องจะได้ช่วยพี่ต่อ 💕" });
+        await notifyAdmin(event, userText || "ลูกค้าส่งข้อความ/รูป");
+        return replyMessages;
+      } catch (error) {
+        console.error("GPT Reply error:", error);
+      }
+    }
+
+    // เคส issue_deposit พิเศษ รอข้อมูล + รูป
+    if (state.currentCase === "issue_deposit") {
+      if (!state.caseData.receivedInfo) {
+        if (userText.length > 5) {
+          await notifyAdmin(event, `ลูกค้าส่งข้อมูลฝากเงิน: ${userText}`);
+          replyMessages.push({ type: "text", text: "ได้รับข้อมูลแล้วค่ะ รบกวนส่งรูปสลิปมาด้วยนะคะ 💕" });
+          updateUserState(userId, { caseData: { receivedInfo: true } });
+          return replyMessages;
+        } else {
+          replyMessages.push({ type: "text", text: "รบกวนแจ้งชื่อ+เบอร์โทร และส่งรูปสลิปด้วยนะคะ 💕" });
+          return replyMessages;
+        }
+      } else if (!state.caseData.receivedSlip) {
+        if (event.message?.type === "image") {
+          await notifyAdmin(event, "ลูกค้าส่งรูปสลิปฝากเงิน");
+          replyMessages.push({ type: "text", text: "ได้รับรูปสลิปแล้วค่ะ กำลังดำเนินการให้นะคะ 💕" });
+          updateUserState(userId, { currentCase: null, caseData: {} });
+          return replyMessages;
+        } else {
+          replyMessages.push({ type: "text", text: "รบกวนส่งรูปสลิปฝากเงินด้วยนะคะ 💕" });
+          return replyMessages;
+        }
+      }
+    }
+
+    // ถ้าไม่มีเคสพิเศษ ให้ตอบ GPT ทั่วไป แบบน่ารักอ้อนชวนเล่น
     try {
-      gptReply = await getCuteDynamicReply(
+      let gptReply = await getCuteDynamicReply(
         `ตอบแบบน่ารัก อ้อนๆ ชวนเล่นเว็บ pgthai289 หากลูกค้าพูดเรื่องอื่น เช่น หิว ให้แนะนำเมนูกะเพราไก่ พร้อมบอกว่าถ้าเล่นเว็บจะมีเงินกินข้าวแบบสบาย ๆ: "${userText}"`
       );
 
@@ -336,14 +376,15 @@ export async function handleCustomerFlow(event) {
         userPausedStates[userId] = true; // หยุดบอท
         return [{ type: "text", text: "น้องยังไม่เข้าใจคำขอ รบกวนรอแอดมินช่วยดูแลนะคะ 💕" }];
       }
+
+      replyMessages.push({ type: "text", text: gptReply });
+      await notifyAdmin(event, userText || "ลูกค้าส่งข้อความ/รูป");
+      return replyMessages;
     } catch (error) {
       console.error("GPT Reply error:", error);
-      gptReply = "น้องขอโทษค่ะ เกิดข้อผิดพลาดในการตอบกลับ รบกวนรอสักครู่ค่ะ 💕";
+      replyMessages.push({ type: "text", text: "น้องขอโทษค่ะ เกิดข้อผิดพลาดในการตอบกลับ รบกวนรอสักครู่ค่ะ 💕" });
+      return replyMessages;
     }
-
-    replyMessages.push({ type: "text", text: gptReply });
-    await notifyAdmin(event, userText || "ลูกค้าส่งข้อความ/รูป");
-    return replyMessages;
   }
 
   return [];
@@ -443,7 +484,7 @@ function createFlexMenuContents() {
             { type: "button", style: "primary", color: "#8E44AD", height: "sm", action: { type: "postback", label: "👑 ถอนสูงสุดวันนี้", data: "max_withdraw" } },
             { type: "button", style: "primary", color: "#8E44AD", height: "sm", action: { type: "postback", label: "🎲 เกมแตกบ่อย", data: "top_game" } },
             { type: "button", style: "primary", color: "#8E44AD", height: "sm", action: { type: "postback", label: "🤝 ค่าคอมแนะนำเพื่อน", data: "referral_commission" } },
-            { type: "button", style: "primary", color: "#8E44AD", height: "sm", action: { type: "postback", label: "✅ ปิดเคส", data: "close_case" } },
+            // { type: "button", style: "primary", color: "#8E44AD", height: "sm", action: { type: "postback", label: "✅ ปิดเคส", data: "close_case" } }, // ยกเลิกปุ่มปิดเคสตามคำขอ
           ],
         },
         styles: { footer: { separator: true } },
