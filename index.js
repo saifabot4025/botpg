@@ -2,6 +2,8 @@ import express from "express";
 import crypto from "crypto";
 import dotenv from "dotenv";
 import { handleLineEvent } from "./controllers/lineController.js";
+import { initCRM } from "./utils/crmManager.js";
+import line from "@line/bot-sdk";
 
 dotenv.config();
 
@@ -59,6 +61,16 @@ app.post("/webhook", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
+
+// ✅ สร้าง LINE Client และเริ่มระบบ CRM
+const lineConfig = {
+  channelAccessToken: CHANNEL_ACCESS_TOKEN,
+  channelSecret: CHANNEL_SECRET,
+};
+const lineClient = new line.Client(lineConfig);
+
+// ✅ เริ่มระบบ CRM
+initCRM(lineClient);
 
 // ✅ Start Server
 app.listen(3000, () => {
