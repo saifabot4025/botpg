@@ -128,56 +128,198 @@ async function generateReferralCommissionMessage() {
 }
 
 /* ================== FLEX ================== */
-function createFlexMenuContents(){
+function createFlexMenuContents() {
   return {
-    type:"carousel",
-    contents:[
-      /* BOX 1 */
+    type: "carousel",
+    contents: [
+      // 📦 BOX 1 – สมัครสมาชิก + Login
       {
-        type:"bubble",
-        hero:{type:"image",url:"https://i.ibb.co/SqbNcr1/image.jpg",size:"full",aspectRatio:"20:13",aspectMode:"cover"},
-        body:{type:"box",layout:"vertical",contents:[
-          {type:"text",text:"PGTHAI289",weight:"bold",size:"xl",color:"#FFD700"},
-          {type:"text",text:"สมัครง่าย มั่นคง ปลอดภัย",size:"sm",color:"#FFFFFF",wrap:true}
-        ]},
-        footer:{type:"box",layout:"vertical",contents:[
-          {type:"button",style:"primary",color:"#FFD700",action:{type:"uri",label:"⭐ สมัครเอง",uri:"https://pgthai289.net/customer/register/LINEBOT/?openExternalBrowser=1"}},
-          {type:"button",style:"secondary",color:"#333333",action:{type:"postback",label:"📲 ให้แอดมินสมัครให้",data:"register_admin"}},
-          {type:"button",style:"primary",color:"#FFD700",action:{type:"uri",label:"🔑 ทางเข้าเล่นหลัก",uri:"https://pgthai289.net/?openExternalBrowser=1"}},
-          {type:"button",style:"secondary",color:"#333333",action:{type:"postback",label:"🚪 ทางเข้าเล่นสำรอง",data:"login_backup"}}
-        ]}
+        type: "bubble",
+        hero: {
+          type: "image",
+          url: "https://i.ibb.co/SqbNcr1/image.jpg",
+          size: "full",
+          aspectRatio: "20:13",
+          aspectMode: "cover",
+        },
+        body: {
+          type: "box",
+          layout: "vertical",
+          backgroundColor: "#4B0082", // ม่วงเข้ม
+          contents: [
+            { type: "text", text: "สมัครสมาชิก + Login", weight: "bold", size: "lg", color: "#FFFFFF" },
+            {
+              type: "text",
+              text: "เว็บเราสมัครฟรีไม่มีค่าใช้จ่าย หากติดขัดปัญหาด้านใดยินดีบริการ 24 ชั่วโมง",
+              size: "sm",
+              color: "#FFFFFF",
+              wrap: true,
+              margin: "md",
+            },
+          ],
+        },
+        footer: {
+          type: "box",
+          layout: "vertical",
+          backgroundColor: "#4B0082",
+          spacing: "sm",
+          contents: [
+            {
+              type: "button",
+              style: "primary",
+              color: "#FFFFFF", // ปุ่มขาว
+              action: {
+                type: "uri",
+                label: "⭐ สมัครเอง",
+                uri: "https://pgthai289.net/customer/register/LINEBOT/?openExternalBrowser=1",
+              },
+            },
+            {
+              type: "button",
+              style: "secondary",
+              color: "#FFD700", // ปุ่มเหลือง
+              action: { type: "postback", label: "📲 ให้แอดมินสมัครให้", data: "register_admin" },
+            },
+            {
+              type: "button",
+              style: "primary",
+              color: "#FFFFFF",
+              action: {
+                type: "uri",
+                label: "🔑 ทางเข้าเล่นหลัก",
+                uri: "https://pgthai289.net/?openExternalBrowser=1",
+              },
+            },
+            {
+              type: "button",
+              style: "secondary",
+              color: "#FFD700",
+              action: { type: "postback", label: "🚪 ทางเข้าเล่นสำรอง", data: "login_backup" },
+            },
+          ],
+        },
       },
-      /* BOX 2 */
+
+      // 📦 BOX 2 – แจ้งปัญหาการใช้งาน
       {
-        type:"bubble",
-        hero:{type:"image",url:"https://i.ibb.co/SqbNcr1/image.jpg",size:"full",aspectRatio:"20:13",aspectMode:"cover"},
-        body:{type:"box",layout:"vertical",contents:[
-          {type:"text",text:"PGTHAI289",weight:"bold",size:"xl",color:"#FFD700"},
-          {type:"text",text:"แจ้งปัญหา & โปรโมชั่น",size:"sm",color:"#FFFFFF",wrap:true}
-        ]},
-        footer:{type:"box",layout:"vertical",contents:[
-          {type:"button",style:"primary",color:"#FFD700",action:{type:"postback",label:"💰 ปัญหาฝาก/ถอน",data:"issue_deposit"}},
-          {type:"button",style:"secondary",color:"#333333",action:{type:"postback",label:"🔑 ลืมรหัสผ่าน",data:"forgot_password"}},
-          {type:"button",style:"primary",color:"#FFD700",action:{type:"postback",label:"🚪 เข้าเล่นไม่ได้",data:"login_backup"}},
-          {type:"button",style:"secondary",color:"#333333",action:{type:"postback",label:"🎁 โปรโมชั่น/กิจกรรม",data:"promo_info"}}
-        ]}
+        type: "bubble",
+        hero: {
+          type: "image",
+          url: "https://i.ibb.co/SqbNcr1/image.jpg",
+          size: "full",
+          aspectRatio: "20:13",
+          aspectMode: "cover",
+        },
+        body: {
+          type: "box",
+          layout: "vertical",
+          backgroundColor: "#4B0082",
+          contents: [
+            { type: "text", text: "แจ้งปัญหาการใช้งาน", weight: "bold", size: "lg", color: "#FFFFFF" },
+            {
+              type: "text",
+              text: "แจ้งปัญหาการใช้งาน แอดมินพร้อมดูแลตลอด 24 ชั่วโมงเลยนะคะ",
+              size: "sm",
+              color: "#FFFFFF",
+              wrap: true,
+              margin: "md",
+            },
+          ],
+        },
+        footer: {
+          type: "box",
+          layout: "vertical",
+          backgroundColor: "#4B0082",
+          spacing: "sm",
+          contents: [
+            {
+              type: "button",
+              style: "primary",
+              color: "#FFFFFF",
+              action: { type: "postback", label: "💰 ปัญหาฝาก/ถอน", data: "issue_deposit" },
+            },
+            {
+              type: "button",
+              style: "secondary",
+              color: "#FFD700",
+              action: { type: "postback", label: "🔑 ลืมรหัสผ่าน", data: "forgot_password" },
+            },
+            {
+              type: "button",
+              style: "primary",
+              color: "#FFFFFF",
+              action: { type: "postback", label: "🚪 เข้าเล่นไม่ได้", data: "login_backup" },
+            },
+            {
+              type: "button",
+              style: "secondary",
+              color: "#FFD700",
+              action: { type: "postback", label: "🎁 โปรโมชั่น/กิจกรรม", data: "promo_info" },
+            },
+          ],
+        },
       },
-      /* BOX 3 */
+
+      // 📦 BOX 3 – รีวิวการถอน + โบนัสไทม์
       {
-        type:"bubble",
-        hero:{type:"image",url:"https://i.ibb.co/SqbNcr1/image.jpg",size:"full",aspectRatio:"20:13",aspectMode:"cover"},
-        body:{type:"box",layout:"vertical",contents:[
-          {type:"text",text:"PGTHAI289",weight:"bold",size:"xl",color:"#FFD700"},
-          {type:"text",text:"รีวิว & เกมแตก",size:"sm",color:"#FFFFFF",wrap:true}
-        ]},
-        footer:{type:"box",layout:"vertical",contents:[
-          {type:"button",style:"primary",color:"#FFD700",action:{type:"postback",label:"⭐ รีวิวถอนล่าสุด",data:"review_withdraw"}},
-          {type:"button",style:"secondary",color:"#333333",action:{type:"postback",label:"👑 ถอนสูงสุดวันนี้",data:"max_withdraw"}},
-          {type:"button",style:"primary",color:"#FFD700",action:{type:"postback",label:"🎮 เกมแตกบ่อย",data:"top_game"}},
-          {type:"button",style:"secondary",color:"#333333",action:{type:"postback",label:"💎 ค่าคอมแนะนำเพื่อน",data:"referral_commission"}}
-        ]}
-      }
-    ]
+        type: "bubble",
+        hero: {
+          type: "image",
+          url: "https://i.ibb.co/SqbNcr1/image.jpg",
+          size: "full",
+          aspectRatio: "20:13",
+          aspectMode: "cover",
+        },
+        body: {
+          type: "box",
+          layout: "vertical",
+          backgroundColor: "#4B0082",
+          contents: [
+            { type: "text", text: "รีวิวการถอน + โบนัสไทม์", weight: "bold", size: "lg", color: "#FFFFFF" },
+            {
+              type: "text",
+              text: "รีวิวการถอน+โบนัสไทม์ เว็บเราจ่ายชัวร์หลักร้อยหรือล้านก็ไวไร้ประวัติโกง",
+              size: "sm",
+              color: "#FFFFFF",
+              wrap: true,
+              margin: "md",
+            },
+          ],
+        },
+        footer: {
+          type: "box",
+          layout: "vertical",
+          backgroundColor: "#4B0082",
+          spacing: "sm",
+          contents: [
+            {
+              type: "button",
+              style: "primary",
+              color: "#FFFFFF",
+              action: { type: "postback", label: "⭐ รีวิวถอนล่าสุด", data: "review_withdraw" },
+            },
+            {
+              type: "button",
+              style: "secondary",
+              color: "#FFD700",
+              action: { type: "postback", label: "👑 ถอนสูงสุดวันนี้", data: "max_withdraw" },
+            },
+            {
+              type: "button",
+              style: "primary",
+              color: "#FFFFFF",
+              action: { type: "postback", label: "🎮 เกมแตกบ่อย", data: "top_game" },
+            },
+            {
+              type: "button",
+              style: "secondary",
+              color: "#FFD700",
+              action: { type: "postback", label: "💎 ค่าคอมแนะนำเพื่อน", data: "referral_commission" },
+            },
+          ],
+        },
+      },
+    ],
   };
 }
 
@@ -187,17 +329,28 @@ export async function handleCustomerFlow(event){
   const state=getUserState(userId);
   const reply=[];
   const text=event.message?.text?.trim()||"";
-
-  if(userPausedStates[userId]){
-    if(text.includes("ดำเนินการให้เรียบร้อยแล้วนะคะพี่")){
-      userPausedStates[userId]=false;
-      updateUserState(userId,{currentCase:null,caseData:{}});
-      reply.push({type:"text",text:"น้องกลับมาดูแลพี่แล้วค่ะ 💕"});
-    }else{
-      reply.push({type:"text",text:"ขณะนี้หัวหน้าฝ่ายกำลังดำเนินการให้อยู่ค่ะ 💕"});
-    }
-    return reply;
+  // ✅ ถ้าแอดมินพิมพ์ว่า "หัวหน้าแอดมินรับเคสค่ะ" → ให้บอทหยุดตอบทันที
+  if (text.replace(/\s/g, "").includes("หัวหน้าแอดมินรับเคสค่ะ")) {
+    userPausedStates[userId] = true;
+    updateUserState(userId, { currentCase: "admin_case" });
+    return [{ 
+      type: "text", 
+      text: "หัวหน้าแอดมินกำลังดูแลพี่อยู่น้องส่งต่อให้เรียบร้อยน้า รอหัวหน้าน้องดำเนินการได้เลยจ้า 💕" 
+    }];
   }
+  if (userPausedStates[userId]) {
+  const normalizedText = text.replace(/\s/g, "").trim();
+  const keywords = ["ดำเนินการให้เรียบร้อยแล้วนะคะพี่", "เรียบร้อยแล้ว", "ทำเสร็จแล้ว", "เสร็จแล้ว"];
+
+  if (keywords.some(keyword => normalizedText.includes(keyword))) {
+    userPausedStates[userId] = false;
+    updateUserState(userId, { currentCase: null, caseData: {} });
+    reply.push({ type: "text", text: "น้องกลับมาดูแลพี่แล้วค่ะ ขอบคุณมากนะคะ 💕" });
+  } else {
+    reply.push({ type: "text", text: "ขณะนี้หัวหน้าฝ่ายกำลังดำเนินการให้อยู่นะคะ 💕" });
+  }
+  return reply;
+}
 
   if(event.type==="follow" && shouldGreet(userId)){
     reply.push({type:"text",text:`สวัสดีค่ะ น้องฟางเป็นแอดมินดูแลลูกค้าของ PGTHAI289 นะคะ 💕`});
