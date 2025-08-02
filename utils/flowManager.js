@@ -25,6 +25,22 @@ function updateUserState(userId, newState) {
   };
 }
 
+// ฟังก์ชันสุ่มเบอร์โทรแบบ 08xxxx1234
+function randomMaskedPhone() {
+  const prefix = "08";
+  const suffix = Math.floor(1000 + Math.random() * 9000); // 4 หลักท้าย
+  return `${prefix}xxxx${suffix}`;
+}
+
+// ฟังก์ชันสุ่มเวลาย้อนหลังไม่เกิน 30 นาทีในรูปแบบ HH:mm
+function randomTimeWithinLast30Min() {
+  const now = new Date();
+  const pastTime = new Date(now.getTime() - Math.floor(Math.random() * 30 * 60000)); // ย้อนหลัง 0-30 นาที
+  const hh = String(pastTime.getHours()).padStart(2, "0");
+  const mm = String(pastTime.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
 // ฟังก์ชันส่งแจ้งเตือนแอดมินครบฟีลลิ่ง
 async function notifyAdmin(event, message) {
   try {
@@ -76,13 +92,10 @@ export async function handleCustomerFlow(event) {
 
   // ถ้าเคสยังไม่จบ ให้คุม flow ตามเคสนั้นก่อน
   if (state.currentCase) {
-    // ตัวอย่างโครงสร้างเคส แก้ไขตามเคสจริง
     switch (state.currentCase) {
       case "register_admin":
         if (!state.caseData.receivedInfo) {
-          // รับข้อมูลลูกค้า
           if (userText.length > 5) {
-            // สมมติข้อมูลครบ
             await notifyAdmin(event, `ลูกค้าส่งข้อมูลสมัคร: ${userText}`);
             replyMessages.push({ type: "text", text: "ได้รับข้อมูลแล้วค่ะ กำลังดำเนินการให้คุณพี่นะคะ 💕" });
             updateUserState(userId, { currentCase: null, caseData: {} });
@@ -95,11 +108,9 @@ export async function handleCustomerFlow(event) {
 
       case "login_backup":
         // ดึงข้อมูลและตอบตามเคส...
-        // ตัวอย่างเดียวกับ register_admin ปรับข้อความและการแจ้งเตือนได้
         break;
 
       case "issue_deposit":
-        // รอข้อมูลและรูป
         if (!state.caseData.receivedInfo) {
           if (userText.length > 5) {
             await notifyAdmin(event, `ลูกค้าส่งข้อมูลฝากเงิน: ${userText}`);
@@ -121,10 +132,9 @@ export async function handleCustomerFlow(event) {
         }
         break;
 
-      // เพิ่มเคสอื่นๆแบบเดียวกัน...
+      // เพิ่มเคสอื่นๆ แบบเดียวกัน...
 
       default:
-        // เคสไม่รู้จัก รีเซ็ตสถานะ
         updateUserState(userId, { currentCase: null, caseData: {} });
         replyMessages.push({ type: "text", text: "น้องขอโทษนะคะ ไม่เข้าใจคำขอของพี่ รบกวนบอกใหม่ได้ไหมคะ 💕" });
         return replyMessages;
@@ -132,7 +142,6 @@ export async function handleCustomerFlow(event) {
   }
 
   // ถ้าเคสว่างเปล่า → ตรวจสอบคำสั่งจากข้อความหรือ postback แล้วกำหนดเคสใหม่หรือโต้ตอบทันที
-
   if (event.type === "postback" && event.postback?.data) {
     const data = event.postback.data;
 
@@ -148,10 +157,21 @@ export async function handleCustomerFlow(event) {
       max_withdraw: "max_withdraw",
       top_game: "top_game",
       referral_commission: "referral_commission",
+      close_case: "close_case", // เคสปิดเคส
     };
 
     if (caseMap[data]) {
       updateUserState(userId, { currentCase: caseMap[data], caseData: {} });
+
+      // หากเป็นปิดเคส แจ้งแอดมินว่าใช้เวลากี่นาที
+      if (data === "close_case") {
+        const caseStart = state.caseData.startTime || Date.now();
+        const durationMs = Date.now() - caseStart;
+        const durationMin = Math.round(durationMs / 60000);
+        await sendTelegramAlert(`✅ แอดมินปิดเคสลูกค้าใช้เวลา ${durationMin} นาที`);
+        updateUserState(userId, { currentCase: null, caseData: {} });
+        return [{ type: "text", text: `ขอบคุณค่ะ เคสถูกปิดเรียบร้อย ใช้เวลาประมาณ ${durationMin} นาที` }];
+      }
     }
 
     // ส่งข้อความเริ่มต้นเคสและโปรโมทเว็บด้วย GPT
@@ -309,6 +329,7 @@ function createFlexMenuContents() {
             { type: "button", style: "primary", color: "#8E44AD", height: "sm", action: { type: "postback", label: "👑 ถอนสูงสุดวันนี้", data: "max_withdraw" } },
             { type: "button", style: "primary", color: "#8E44AD", height: "sm", action: { type: "postback", label: "🎲 เกมแตกบ่อย", data: "top_game" } },
             { type: "button", style: "primary", color: "#8E44AD", height: "sm", action: { type: "postback", label: "🤝 ค่าคอมแนะนำเพื่อน", data: "referral_commission" } },
+            { type: "button", style: "primary", color: "#8E44AD", height: "sm", action: { type: "postback", label: "✅ ปิดเคส", data: "close_case" } },
           ],
         },
         styles: { footer: { separator: true } },
@@ -321,33 +342,78 @@ function createFlexMenuContents() {
 async function generateWithdrawReviewMessage() {
   const reviews = [];
   for (let i = 0; i < 10; i++) {
-    const phone = `08${Math.floor(1000000 + Math.random() * 9000000)}`;
-    const hiddenPhone = `${phone.slice(0, 2)}xxxx${phone.slice(-4)}`;
-    const amount = (Math.floor(Math.random() * 45000) + 5000).toLocaleString();
-    const hour = String(Math.floor(Math.random() * 24)).padStart(2, "0");
-    const minute = String(Math.floor(Math.random() * 60)).padStart(2, "0");
+    const phone = randomMaskedPhone();
+    const amount = (Math.floor(Math.random() * (50000 - 5000)) + 5000).toLocaleString();
+    const time = randomTimeWithinLast30Min();
 
-    reviews.push(`ยูส ${hiddenPhone} ถอน ${amount} เวลา ${hour}:${minute}`);
+    reviews.push(`ยูส ${phone} ถอน ${amount} เวลา ${time}`);
   }
   return `📊 รีวิวการถอน 30 นาทีที่ผ่านมา\n\n${reviews.join("\n")}`;
 }
 
-// ตัวอย่างฟังก์ชันสร้างข้อความยอดถอนสูงสุดประจำวันแบบสุ่ม
+// ตัวอย่างฟังก์ชันสร้างข้อความยอดถอนสูงสุดประจำวันแบบคงที่ทั้งวัน
+let cachedMaxWithdrawDate = null;
+let cachedMaxWithdrawAmount = null;
 async function generateMaxWithdrawMessage() {
-  const phone = `08${Math.floor(1000000 + Math.random() * 9000000)}`;
-  const hiddenPhone = `${phone.slice(0, 2)}xxxx${phone.slice(-4)}`;
-  const amount = (Math.floor(Math.random() * 450000) + 50000).toLocaleString();
   const today = new Date().toLocaleDateString("th-TH");
-
-  return `👑 ยอดถอนสูงสุดวันนี้\n\nยูส ${hiddenPhone} ถอนสูงสุด ${amount} บาท\nวันที่ ${today}`;
+  if (cachedMaxWithdrawDate !== today) {
+    cachedMaxWithdrawDate = today;
+    cachedMaxWithdrawAmount = Math.floor(Math.random() * (500000 - 300000)) + 300000;
+  }
+  const phone = randomMaskedPhone();
+  return `👑 ยอดถอนสูงสุดวันนี้\n\nยินดีกับคุณพี่ "สมชาย" ยูส ${phone} ถอน ${cachedMaxWithdrawAmount.toLocaleString()} บาท\nวันที่ ${cachedMaxWithdrawDate}`;
 }
 
-// ตัวอย่างฟังก์ชันสร้างข้อความเกมแตกบ่อย
+// ฟังก์ชันสร้างข้อความเกมแตกบ่อย พร้อม % การแตก และยอดฟรีสปิน/ยอดแตกธรรมดา
 async function generateTopGameMessage() {
-  return `🎲 เกมแตกบ่อย\n\n1. สาวถ้ำ\n2. กิเลน\n3. Mahjong Ways\n4. Dragon Hatch\n5. Ninja vs Samurai\nเล่นง่าย แตกบ่อย จ่ายจริง 💕`;
+  const games = [
+    "Graffiti Rush • กราฟฟิตี้ รัช",
+    "Treasures of Aztec • สาวถ้ำ",
+    "Fortune Ox • วัวโดด",
+    "Fortune Snake • งู",
+    "Fortune Rabbit • เกมกระต่าย",
+    "Lucky Neko • ลัคกี้ เนโกะ แมว",
+    "Fortune Mouse • เกมหนูสามแถว",
+    "Dragon Hatch • เกมมังกร",
+    "Wild Bounty Showdown • คาวบอย",
+    "Ways of the Qilin • กิเลน",
+    "Galaxy Miner • อวกาศพาโชค",
+    "Incan Wonders • สัญลักษณ์ชนเผ่า",
+    "Diner Frenzy Spins • อาหารมั่งคั่ง",
+    "Dragon's Treasure Quest • มังกรซ่อนสมบัติ",
+    "Jack the Giant Hunter • แจ็กผู้ฆ่ายัก",
+  ];
+
+  // สุ่มเกม 5 เกมที่แตกบ่อย
+  const shuffled = games.sort(() => 0.5 - Math.random());
+  const selectedGames = shuffled.slice(0, 5);
+
+  // สุ่ม % การแตก 50-99%
+  const randomPercent = () => Math.floor(Math.random() * 50) + 50;
+
+  // สุ่มยอดฟรีสปิน 20,000 - 200,000
+  const freeSpinAmount = Math.floor(Math.random() * (200000 - 20000)) + 20000;
+
+  // สุ่มยอดแตกธรรมดา 3,000 - 50,000
+  const normalAmount = Math.floor(Math.random() * (50000 - 3000)) + 3000;
+
+  let message = `🎲 เกมสล็อตแตกบ่อยวันนี้\n\n`;
+  selectedGames.forEach((game, idx) => {
+    message += `${idx + 1}. ${game} - ${randomPercent()}%\n`;
+  });
+  message += `\n💥 ลูกค้าฟรีสปินแตกล่าสุด: ${freeSpinAmount.toLocaleString()} บาท\n`;
+  message += `💥 ลูกค้าปั่นธรรมดาแตกล่าสุด: ${normalAmount.toLocaleString()} บาท\n`;
+  message += `เล่นง่าย แตกบ่อย จ่ายจริง 💕`;
+  return message;
 }
 
-// ตัวอย่างฟังก์ชันสร้างข้อความค่าคอมมิชชั่นแนะนำเพื่อน
+// ฟังก์ชันสร้างข้อความค่าคอมมิชชั่นแนะนำเพื่อน (10 รายการ)
 async function generateReferralCommissionMessage() {
-  return `🤝 ค่าคอมมิชชั่นแนะนำเพื่อน\n\nแนะนำเพื่อนมาร่วมสนุก รับค่าคอมมิชชั่น 1% จากยอดเล่นของเพื่อนทันทีค่ะ 💕\nสมัครเลยที่ https://pgthai289.net/customer/register/LINEBOT/?openExternalBrowser=1`;
+  const lines = [];
+  for (let i = 0; i < 10; i++) {
+    const phone = randomMaskedPhone();
+    const amount = (Math.floor(Math.random() * (100000 - 3000)) + 3000).toLocaleString();
+    lines.push(`ยูส ${phone} ได้ค่าคอมมิชชั่นจากยอดเล่นเพื่อน ${amount}`);
+  }
+  return `🤝 ค่าคอมมิชชั่นแนะนำเพื่อน\n\n${lines.join("\n")}\n\nชวนมาสร้างรายได้ด้วยกันง่ายๆ สอบถามได้ที่แอดมินค่ะ 💕`;
 }
