@@ -1,3 +1,62 @@
+
+// ========== Sentiment Analysis Helper ==========
+function analyzeSentiment(text) {
+  const flirtWords = ["คิดถึง", "น่ารัก", "ชอบนะ", "จีบ", "เป็นแฟน", "รัก"];
+  const adultWords = ["จูบ", "กอด", "ห้อง", "18+", "เซ็ก", "เสียว", "xxx"];
+  const angryWords = ["โกง", "เหี้ย", "สัส", "ควย", "ห่วย", "กาก", "โมโห", "ไม่จ่าย"];
+
+  if (angryWords.some(w => text.includes(w))) return "angry";
+  if (flirtWords.some(w => text.includes(w))) return "flirt";
+  if (adultWords.some(w => text.includes(w))) return "adult";
+  if (text.endsWith("?")) return "info";
+  return "neutral";
+}
+
+// ========== Prompt Master ==========
+function buildPrompt(assistantName, historyContext, realData, sentiment, text) {
+  let roleDesc = "บทบาท: เป็นแอดมินผู้หญิงชื่อ " + assistantName + " ของ PGTHAI289\n";
+  roleDesc += "ประวัติการคุยก่อนหน้า:\n" + historyContext + "\n";
+  roleDesc += "ข้อมูลจริง (ถ้ามี): " + realData + "\n";
+
+  if (sentiment === "angry") {
+    return `${roleDesc}
+หน้าที่: ตอบลูกค้าที่โกรธหรือด่าอย่างสุภาพและปลอบใจ ใช้จิตวิทยาให้ลูกค้าสบายใจ ยืนยันว่าเว็บมั่นคงและดูแลลูกค้าจริง
+1. ฟังลูกค้า เข้าใจอารมณ์ และปลอบใจ
+2. อธิบายว่าเว็บ PGTHAI289 จ่ายจริง มั่นคง ปลอดภัย
+3. เสนอช่วยเหลือ และปิดท้ายด้วยคำชวนเล่นแบบอบอุ่น
+ข้อความลูกค้า: "${text}"`;
+  }
+  if (sentiment === "flirt") {
+    return `${roleDesc}
+หน้าที่: ตอบลูกค้าที่จีบหรือล้อเล่นแบบน่ารัก ขี้เล่น แต่ไม่เกินนโยบาย
+1. ตอบแบบอ้อนๆ เป็นกันเอง
+2. ใส่ความรู้สึกสนุกสนาน แต่ไม่หยาบคาย
+3. ปิดท้ายชวนเล่นเว็บแบบเนียน
+ข้อความลูกค้า: "${text}"`;
+  }
+  if (sentiment === "adult") {
+    return `${roleDesc}
+หน้าที่: ตอบลูกค้าที่คุยเรื่อง 18+ แบบแซวๆ ขี้เล่น แต่ไม่ส่ออนาจาร
+1. ตอบให้ดูขำๆ น่ารัก แต่ไม่พูดหยาบหรือส่อไปทางเพศ
+2. ทำให้บรรยากาศเป็นกันเอง
+3. ปิดท้ายชวนเล่นเว็บแบบเนียน
+ข้อความลูกค้า: "${text}"`;
+  }
+  if (sentiment === "info") {
+    return `${roleDesc}
+หน้าที่: ตอบคำถามข้อมูลของลูกค้าอย่างฉลาดและมืออาชีพ
+1. ให้ข้อมูลจริงก่อน ถ้ามี
+2. ปิดท้ายชวนเล่นเว็บ PGTHAI289 แบบเนียน
+ข้อความลูกค้า: "${text}"`;
+  }
+  return `${roleDesc}
+หน้าที่: ตอบลูกค้าแบบเป็นกันเอง น่ารัก ฉลาด
+1. คุยกับลูกค้าอย่างอบอุ่น
+2. ปิดท้ายด้วย Soft Sell ชวนเล่นเว็บ
+ข้อความลูกค้า: "${text}"`;
+}
+
+
 let globalPause = false; // ✅ Pause ทั้งห้องแบบ Global
 /* ================== FLOW MANAGER (FINAL PRO VERSION) ================== */
 import { getCuteDynamicReply } from "../services/gptService.js";
@@ -365,6 +424,7 @@ export async function handleCustomerFlow(event){
   updateUserState(userId, { lastActive: Date.now() });
   const reply=[];
   const text=event.message?.text?.trim()||"";
+  console.log('[DEBUG] ข้อความ:', text, '| globalPause =', globalPause);
   // ✅ ตรวจจับคำด่า/ข้อความเชิงลบ
 const negativeWords = [
   "โกง", "เว็บโกง", "เว็บห่วย", "ขี้โกง", "ไม่จ่าย", "เชิดเงิน", "เว็บไม่ดี", "โดนโกง",
@@ -377,7 +437,7 @@ const negativeWords = [
 const containsNegative = negativeWords.some(word => text.includes(word));
 
 if (containsNegative) {
-  const apologyReply = await getCuteDynamicReply(``
+  const apologyReply = await getCuteDynamicReply(```
     บทบาท: เป็นแอดมินสาวมืออาชีพของ PGTHAI289 
 สิ่งที่ต้องทำ:
 1. ฟังความรู้สึกลูกค้าและเข้าใจความผิดหวังหรืออารมณ์เสีย
@@ -386,7 +446,7 @@ if (containsNegative) {
 4. เชิญชวนให้ลูกค้าสอบถามหรือขอความช่วยเหลือได้ 24 ชั่วโมง
 5. ตอบสั้น กระชับ และเป็นกันเองไม่เกิน 2 ประโยค
 ข้อความจากลูกค้า: "${text}"
-  ``);
+  ```);
  return [{ type: "text", text: apologyReply }]; // ✅ ตรงนี้ OK แล้ว
 }
   // ✅ ถ้าแอดมินพิมพ์ว่า "หัวหน้าแอดมินรับเคสค่ะ" → ให้บอทหยุดตอบทันที
@@ -518,11 +578,12 @@ if (!state.assistantName || now - state.lastGreeted > 10 * 60 * 1000 || event.ty
 }
 const assistantName = state.assistantName;
 // ✅ สร้าง prompt แบบฉลาด
-  let gptPrompt;
-  const historyContext = state.chatHistory.map(h => `${h.role}: ${h.content}`).join('\n');
-  if (containsNegative) {
-    gptPrompt = 
-`บทบาท: เป็นแอดมินผู้หญิงชื่อ ${assistantName} ของ PGTHAI289\nประวัติการคุยก่อนหน้า:\n${historyContext}\nข้อมูลจริง (ถ้ามี): ${realData}`
+  const sentiment = analyzeSentiment(text);
+  const historyContext = state.chatHistory.map(h => `${h.role}: ${h.content}`).join('
+');
+  const gptPrompt = buildPrompt(state.assistantName || 'น้องฟาง', historyContext, realData, sentiment, text);
+
+  gptPrompt = `บทบาท: เป็นแอดมินผู้หญิงชื่อ ${assistantName} ของ PGTHAI289\nประวัติการคุยก่อนหน้า:\n${historyContext}\nข้อมูลจริง (ถ้ามี): ${realData}`
 หน้าที่: ตอบลูกค้าอย่างมืออาชีพ สุภาพ และปลอบใจลูกค้าที่ใช้คำแรงหรือสงสัยว่าเว็บโกง
 สิ่งที่ต้องทำ:
 1. ตอบแบบอ่อนโยน มีความเข้าใจความรู้สึกลูกค้า
