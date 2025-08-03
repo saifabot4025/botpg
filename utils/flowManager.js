@@ -451,9 +451,10 @@ function initCRM(lineClient) {
 }
 
 // ===== DEBUG LOG/HEALTH CHECK =====
-async function debugLogToTelegram(msg) {
+export async function debugLogToTelegram(msg) {
   try { await sendTelegramAlert(`[DEBUG LOG] ${msg}`); } catch (err) { }
 }
+
 export function getBotHealthStatus() {
   return {
     totalUsers: Object.keys(userStates).length,
@@ -463,6 +464,7 @@ export function getBotHealthStatus() {
   };
 }
 
+// === EXPORT AS MODULE (ESM) ===
 export {
   handleCustomerFlow,
   tryResumeFromPause,
