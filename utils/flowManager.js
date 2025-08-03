@@ -4,85 +4,54 @@ import { sendTelegramAlert, sendTelegramPhoto, getLineProfile } from "../service
 import { getLineImage } from "../services/lineMediaService.js";
 import { staffNames } from "../utils/staffNames.js";
 
+// --------- STATE ---------
 const userStates = {};
-const userPausedStates = {};
+let globalPause = false;      // Pause ทั้งห้อง
+let pauseBy = null;           // User id ของคนที่ pause
+
 const flexCooldown = 2 * 60 * 60 * 1000; // 2 ชั่วโมง
 const greetCooldown = 10 * 60 * 1000;    // 10 นาที
 const nameLockMinutes = 10;              // 10 นาทีล็อกชื่อ
 
+// --------- KEYWORDS ---------
 const pauseKeywords = [
-  "แอดมินรับเคสแล้ว",
-  "แอดมินกำลังดูแล",
-  "หัวหน้าแอดมินรับเคส",
-  "แอดมินกำลังดำเนินการ",
-  "รับเคสแล้วค่ะ",
-  "รับเรื่องแล้วนะคะ",
-  "แอดมินกำลังช่วยอยู่",
-  "กำลังตรวจสอบให้ค่ะ",
-  "กำลังดำเนินการให้ค่ะ",
-  "กำลังดูแลอยู่ค่ะ",
-  "แอดมินมาดูแล",
-  "แอดมินเข้ามาดูแลแล้ว",
-  "รับเรื่องแล้วค่ะ",
-  "รับเรื่องเรียบร้อยแล้ว"
+  "แอดมินรับเคสแล้ว", "แอดมินกำลังดูแล", "หัวหน้าแอดมินรับเคส", "แอดมินกำลังดำเนินการ",
+  "รับเคสแล้วค่ะ", "รับเรื่องแล้วนะคะ", "แอดมินกำลังช่วยอยู่", "กำลังตรวจสอบให้ค่ะ",
+  "กำลังดำเนินการให้ค่ะ", "กำลังดูแลอยู่ค่ะ", "แอดมินมาดูแล", "แอดมินเข้ามาดูแลแล้ว",
+  "รับเรื่องแล้วค่ะ", "รับเรื่องเรียบร้อยแล้ว"
 ];
-
 const unpauseKeywords = [
-  "ดำเนินการให้เรียบร้อยแล้วค่ะ",
-  "ดำเนินการเรียบร้อยแล้วค่ะ",
-  "เคสนี้เสร็จแล้วค่ะ",
-  "เสร็จเรียบร้อยแล้วค่ะ",
-  "ดำเนินการเสร็จแล้วค่ะ",
-  "เรียบร้อยแล้วค่ะ",
-  "จัดการเสร็จแล้วค่ะ",
-  "แก้ไขเรียบร้อยค่ะ",
-  "เรียบร้อยแล้วนะคะ",
-  "เสร็จแล้วค่ะ",
-  "เคสเสร็จเรียบร้อยค่ะ"
+  "ดำเนินการให้เรียบร้อยแล้วค่ะ","ดำเนินการเรียบร้อยแล้วค่ะ","เคสนี้เสร็จแล้วค่ะ","เสร็จเรียบร้อยแล้วค่ะ",
+  "ดำเนินการเสร็จแล้วค่ะ","เรียบร้อยแล้วค่ะ","จัดการเสร็จแล้วค่ะ","แก้ไขเรียบร้อยค่ะ",
+  "เรียบร้อยแล้วนะคะ","เสร็จแล้วค่ะ","เคสเสร็จเรียบร้อยค่ะ"
 ].map(k => k.replace(/\s/g, ""));
 
+// --------- UTILS ---------
 function getUserState(userId) {
   if (!userStates[userId]) {
     userStates[userId] = {
-      lastFlexSent: 0,
-      lastGreeted: 0,
-      currentCase: null,
-      caseData: {},
-      lastActive: Date.now(),
-      chatHistory: [],
-      totalDeposit: 0,
-      assistantName: null,
-      assistantNameSetAt: 0,
-      caseFollowUpCount: 0,
+      lastFlexSent: 0, lastGreeted: 0, currentCase: null, caseData: {}, lastActive: Date.now(),
+      chatHistory: [], totalDeposit: 0, assistantName: null, assistantNameSetAt: 0, caseFollowUpCount: 0,
+      formStep: null, formData: {},
     };
   }
   return userStates[userId];
 }
-
 function updateUserState(userId, newState) {
   userStates[userId] = { ...getUserState(userId), ...newState };
 }
-
 function shouldSendFlex(userId) {
   const state = getUserState(userId);
   return Date.now() - state.lastFlexSent > flexCooldown;
 }
-
 function shouldGreet(userId) {
   const state = getUserState(userId);
   return Date.now() - state.lastGreeted > greetCooldown;
 }
-
-function resetUserPauseState(userId) {
-  userPausedStates[userId] = false;
-  updateUserState(userId, {
-    currentCase: null,
-    caseData: {},
-    caseFollowUpCount: 0,
-    lastGreeted: 0,
-  });
+function resetGlobalPause() {
+  globalPause = false; pauseBy = null;
+  Object.keys(userStates).forEach(uid => updateUserState(uid, { currentCase: null, caseData: {}, caseFollowUpCount: 0, lastGreeted: 0 }));
 }
-
 function pickAssistantName(userId, state) {
   const now = Date.now();
   if (state.assistantName && state.assistantNameSetAt && (now - state.assistantNameSetAt < nameLockMinutes * 60 * 1000)) {
@@ -92,13 +61,11 @@ function pickAssistantName(userId, state) {
   updateUserState(userId, { assistantName: newName, assistantNameSetAt: now });
   return newName;
 }
-
 function randomMaskedPhone() {
   const prefix = "08";
   const suffix = Math.floor(1000 + Math.random() * 9000);
   return `${prefix}xxxx${suffix}`;
 }
-
 async function notifyAdmin(event, msg) {
   try {
     const profile = await getLineProfile(event.source?.userId);
@@ -109,35 +76,21 @@ async function notifyAdmin(event, msg) {
       const photo = await getLineImage(event.message.id);
       if (photo) await sendTelegramPhoto(photo, `📷 รูปจากลูกค้า (${name})`);
     }
-  } catch (err) {
-    console.error("notifyAdmin error:", err);
-  }
+  } catch (err) { console.error("notifyAdmin error:", err); }
 }
-
 function detectNegative(text) {
-  const negatives = [
-    "โกง", "ขโมย", "ไม่จ่าย", "ถอนเงินไม่ได้", "แย่", "เสียใจ", "โมโห", "หัวร้อน", "โดนโกง", "ไม่ยอมโอน",
-    "โดนหลอก", "บริการแย่", "จะฟ้อง", "ไม่คืนเงิน", "เว็บเถื่อน", "ไม่โปร่งใส", "หลอกลวง", "ไม่พอใจ",
-    "เหี้ย", "สัส", "สัตว์", "ควาย", "โง่", "เฮงซวย", "ห่วย", "ไอ้เหี้ย", "ไอ้สัส", "ไอ้สัตว์", "ไอ้ควาย",
-    "ไอ้โง่", "หน้าหี", "อีดอก", "อีเหี้ย", "อีควาย", "อีสัตว์", "อีหน้าหี", "อีสัส", "ชั่ว", "สถุน", "ถ่อย",
-    "อัปรีย์", "ต่ำตม", "อีเวร", "เวร", "กรรม", "อีบ้า", "ไอ้บ้า", "กาก", "กะหรี่", "ร่าน", "แม่ง", "เชี่ย", "มึง", "กู", "ฟาย", "แดก", "หัวควย", "ขี้โกง", "โกงแดก", "มึงโกง",
-    "เชี้ย", "สันขวาน", "หน้าส้นตีน", "ไร้มารยาท", "ไม่เคารพ", "หน้าด้าน", "น่ารังเกียจ", "ส้นตีน"
-  ];
+  const negatives = ["โกง","ขโมย","ไม่จ่าย","ถอนเงินไม่ได้","แย่","เสียใจ","โมโห","หัวร้อน","โดนโกง","ไม่ยอมโอน","โดนหลอก","บริการแย่","จะฟ้อง","ไม่คืนเงิน","เว็บเถื่อน","ไม่โปร่งใส","หลอกลวง","ไม่พอใจ","เหี้ย","สัส","สัตว์","ควาย","โง่","เฮงซวย","ห่วย","ไอ้เหี้ย","ไอ้สัส","ไอ้สัตว์","ไอ้ควาย","ไอ้โง่","หน้าหี","อีดอก","อีเหี้ย","อีควาย","อีสัตว์","อีหน้าหี","อีสัส","ชั่ว","สถุน","ถ่อย","อัปรีย์","ต่ำตม","อีเวร","เวร","กรรม","อีบ้า","ไอ้บ้า","กาก","กะหรี่","ร่าน","แม่ง","เชี่ย","มึง","กู","ฟาย","แดก","หัวควย","ขี้โกง","โกงแดก","มึงโกง","เชี้ย","สันขวาน","หน้าส้นตีน","ไร้มารยาท","ไม่เคารพ","หน้าด้าน","น่ารังเกียจ","ส้นตีน"];
   return negatives.some(word => text.includes(word));
 }
-
 function logNegativeToTelegram(userId, text) {
   sendTelegramAlert(`⚠️ [คำหยาบ/คำแรง] จากยูสเซอร์ ${userId}\nข้อความ: ${text}`);
 }
-
 async function fetchRealData(query) {
   try {
     const encodedQuery = encodeURIComponent(query);
     const url = `https://www.google.com/search?q=${encodedQuery}`;
     const res = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
-      }
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" }
     });
     const html = await res.text();
     const match = html.match(/<span class="BNeawe[^>]*>(.*?)<\/span>/);
@@ -147,7 +100,6 @@ async function fetchRealData(query) {
     return "ไม่สามารถค้นหาข้อมูลได้";
   }
 }
-
 async function generateWithdrawReviewMessage() {
   const reviews = [];
   for (let i = 0; i < 10; i++) {
@@ -157,7 +109,6 @@ async function generateWithdrawReviewMessage() {
   }
   return `📊 รีวิวการถอนล่าสุด\n\n${reviews.join("\n")}\n\nเว็บมั่นคง ปลอดภัย จ่ายจริง 💕`;
 }
-
 async function generateMaxWithdrawMessage() {
   const today = new Date().toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok" });
   if (!global.cachedDate || global.cachedDate !== today) {
@@ -175,23 +126,13 @@ async function generateMaxWithdrawMessage() {
   }
   return `👑 ยอดถอนสูงสุดวันนี้\n\nยินดีกับคุณ "${global.cachedName}" ยูส ${randomMaskedPhone()} ถอน ${global.cachedAmt.toLocaleString()} บาท\nวันที่ ${today}`;
 }
-
 async function generateTopGameMessage() {
   const games = [
-    "Graffiti Rush • กราฟฟิตี้ รัช",
-    "Treasures of Aztec • สาวถ้ำ",
-    "Fortune Ox • วัวโดด",
-    "Fortune Snake • งูทอง",
-    "Fortune Rabbit • กระต่ายโชคลาภ",
-    "Lucky Neko • แมวกวัก",
-    "Fortune Mouse • หนูทอง",
-    "Dragon Hatch • รังมังกร",
-    "Wild Bounty Showdown • คาวบอย",
-    "Ways of the Qilin • กิเลน",
-    "Galaxy Miner • นักขุดอวกาศ",
-    "Incan Wonders • สิ่งมหัศจรรย์อินคา",
-    "Diner Frenzy Spins • มื้ออาหารสุดปัง",
-    "Dragon's Treasure Quest • มังกรซ่อนสมบัติ",
+    "Graffiti Rush • กราฟฟิตี้ รัช", "Treasures of Aztec • สาวถ้ำ", "Fortune Ox • วัวโดด",
+    "Fortune Snake • งูทอง", "Fortune Rabbit • กระต่ายโชคลาภ", "Lucky Neko • แมวกวัก",
+    "Fortune Mouse • หนูทอง", "Dragon Hatch • รังมังกร", "Wild Bounty Showdown • คาวบอย",
+    "Ways of the Qilin • กิเลน", "Galaxy Miner • นักขุดอวกาศ", "Incan Wonders • สิ่งมหัศจรรย์อินคา",
+    "Diner Frenzy Spins • มื้ออาหารสุดปัง", "Dragon's Treasure Quest • มังกรซ่อนสมบัติ",
     "Jack the Giant Hunter • แจ็กผู้ฆ่ายักษ์"
   ];
   const selected = games.sort(() => 0.5 - Math.random()).slice(0, 5);
@@ -202,7 +143,6 @@ async function generateTopGameMessage() {
   msg += `\n💥 ฟรีสปินแตกล่าสุด: ${freeSpin.toLocaleString()} บาท\n💥 ปั่นธรรมดาแตกล่าสุด: ${normal.toLocaleString()} บาท\nเล่นเลย แตกง่าย จ่ายจริง 💕`;
   return msg;
 }
-
 async function generateReferralCommissionMessage() {
   const lines = [];
   for (let i = 0; i < 10; i++) {
@@ -213,6 +153,7 @@ async function generateReferralCommissionMessage() {
   return `🤝 ค่าคอมมิชชั่นแนะนำเพื่อน\n\n${lines.join("\n")}\n\n💡 ชวนเพื่อนมาเล่น รับค่าคอมทุกวัน!`;
 }
 
+// ---------- FLEX MENU + POSTBACK FLOW -----------
 function createFlexMenuContents() {
   return {
     type: "carousel",
@@ -281,115 +222,140 @@ function createFlexMenuContents() {
   };
 }
 
+// --------------------------
+//   MAIN FLOW FUNCTION
+// --------------------------
 async function handleCustomerFlow(event, lineClient) {
-  if (event.source?.type !== 'user') return [];
-  if (!event.message && event.type !== 'postback' && event.type !== 'follow') return [];
-
   const userId = event.source?.userId;
   const state = getUserState(userId);
   updateUserState(userId, { lastActive: Date.now() });
 
   const text = event.message?.text?.trim() || "";
   const normalizedText = text.toLowerCase().replace(/\s/g, "");
-  const reply = [];
 
-  console.log(`[PAUSE DEBUG] userId=${userId} isPaused=${!!userPausedStates[userId]} currentCase=${state.currentCase}`);
-  console.log(`[PAUSE DEBUG] text='${text}' normalized='${normalizedText}'`);
-
-  // Command to reset pause status (for admin/testing)
-  if (/resetpause/.test(normalizedText)) {
-    resetUserPauseState(userId);
-    reply.push({ type: "text", text: "ระบบได้รีเซ็ตสถานะ pause ให้เรียบร้อยแล้วค่ะ" });
-    return reply;
+  // -------------- PAUSE/UNPAUSE --------------
+  if (pauseKeywords.some(k => normalizedText.includes(k.replace(/\s/g, "")))) {
+    globalPause = true; pauseBy = userId;
+    await sendTelegramAlert(`[PAUSE] (${pauseBy}) เปิด pause`);
+    return [{ type: "text", text: "หัวหน้าแอดมินกำลังดูแลลูกค้าอยู่ค่ะ น้องส่งต่อให้เรียบร้อยแล้ว 💕 (โหมด pause)" }];
   }
-
-  // Detect pause keywords to enable pause mode
-  if (pauseKeywords.some(keyword => normalizedText.includes(keyword.replace(/\s/g, "")))) {
-    userPausedStates[userId] = true;
-    updateUserState(userId, { currentCase: "admin_case" });
-    reply.push({ type: "text", text: "หัวหน้าแอดมินกำลังดูแลพี่อยู่นะคะ น้องส่งต่อให้เรียบร้อยแล้วค่ะ 💕" });
-    return reply;
+  if (globalPause && unpauseKeywords.some(k => normalizedText.includes(k))) {
+    resetGlobalPause();
+    await sendTelegramAlert(`[UNPAUSE] (${userId}) ปลด pause`);
+    return [
+      { type: "text", text: "ยินดีให้บริการตลอด 24 ชั่วโมงเลยนะคะ ถ้ามีคำถามหรือปัญหาเพิ่มเติม แจ้งน้องได้เลยค่ะ 💖" },
+      { type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() }
+    ];
   }
-
-  // Detect unpause keywords to disable pause mode
-  if (userPausedStates[userId] && unpauseKeywords.some(keyword => normalizedText.includes(keyword))) {
-    resetUserPauseState(userId);
-    reply.push({ type: "text", text: "ยินดีให้บริการตลอด 24 ชั่วโมงเลยนะคะ ถ้ามีคำถามหรือปัญหาเพิ่มเติม แจ้งน้องได้เลยค่ะ 💖" });
-    reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
-    return reply;
-  }
-
-  // If paused and user sends message/image, notify admin and acknowledge
-  if (userPausedStates[userId] && state.currentCase === "admin_case" && (text.length > 3 || event.message?.type === "image")) {
-    reply.push({ type: "text", text: "ได้รับข้อมูลแล้วค่ะ น้องจะประสานงานกับหัวหน้าฝ่ายให้เรียบร้อยแล้วนะคะ 💕" });
-    await notifyAdmin(event, `ข้อมูลจากลูกค้า (เคส ${state.currentCase}): ${text || "ส่งรูป"}`);
-    return reply;
-  }
-
-  // If paused and none of above, ignore messages (no reply)
-  if (userPausedStates[userId]) {
-    console.log(`[PAUSE DEBUG] Pause mode active, ไม่ตอบข้อความอื่น userId=${userId}`);
+  if (globalPause) {
+    await sendTelegramAlert(`[DEBUG] ignore, pause by ${pauseBy}, msg="${text}"`);
     return [];
   }
 
-  // Normal conversation flow starts here:
-  const assistantName = pickAssistantName(userId, state);
+  // ------------- POSTBACK BUTTONS -------------
+  if (event.type === "postback") {
+    const data = event.postback.data;
 
+    // ---- สมัครโดย admin step form ----
+    if (data === "register_admin" || state.formStep === "register_name") {
+      if (!state.formStep) {
+        updateUserState(userId, { formStep: "register_name", formData: {} });
+        return [{ type: "text", text: "สมัครสมาชิกให้! กรุณาพิมพ์ชื่อ-นามสกุล" }];
+      }
+      if (state.formStep === "register_name") {
+        if (!text) return [{ type: "text", text: "กรุณาพิมพ์ชื่อ-นามสกุลด้วยค่ะ" }];
+        state.formData.name = text;
+        updateUserState(userId, { formStep: "register_phone", formData: state.formData });
+        return [{ type: "text", text: "ขอเบอร์โทรศัพท์ค่ะ" }];
+      }
+      if (state.formStep === "register_phone") {
+        if (!text) return [{ type: "text", text: "กรุณาพิมพ์เบอร์โทรด้วยค่ะ" }];
+        state.formData.phone = text;
+        updateUserState(userId, { formStep: "register_account", formData: state.formData });
+        return [{ type: "text", text: "ขอเลขบัญชี (หรือวอลเลท) ที่ใช้สมัครด้วยค่ะ" }];
+      }
+      if (state.formStep === "register_account") {
+        if (!text) return [{ type: "text", text: "กรุณาพิมพ์เลขบัญชีหรือวอลเลทด้วยค่ะ" }];
+        state.formData.account = text;
+        updateUserState(userId, { formStep: "register_lineid", formData: state.formData });
+        return [{ type: "text", text: "ขอ Line ID ที่ใช้ติดต่อค่ะ" }];
+      }
+      if (state.formStep === "register_lineid") {
+        if (!text) return [{ type: "text", text: "กรุณาพิมพ์ LINE ID ด้วยค่ะ" }];
+        state.formData.lineid = text;
+        updateUserState(userId, { formStep: null });
+        await notifyAdmin(event, "ลูกค้าสมัคร: " + JSON.stringify(state.formData));
+        return [{ type: "text", text: "น้องรับข้อมูลสมัครเรียบร้อยแล้ว รอแอดมินดำเนินการนะคะ ขอบคุณค่ะ 💕" }];
+      }
+    }
+
+    // ---- ปุ่มอื่นๆ ----
+    if (data === "login_backup") {
+      return [{ type: "text", text: "นี่คือทางเข้าเล่นสำรอง https://pgthai289.net/backup หากเข้าไม่ได้แจ้งน้องแอดมินนะคะ" }];
+    }
+    if (data === "issue_deposit") {
+      updateUserState(userId, { formStep: "deposit_problem" });
+      return [{ type: "text", text: "โปรดอธิบายปัญหาฝาก/ถอนของคุณ พร้อมแนบสลิป (ถ้ามี) เดี๋ยวน้องแจ้งแอดมินให้ค่ะ" }];
+    }
+    if (data === "forgot_password") {
+      updateUserState(userId, { formStep: "forgot_password" });
+      return [{ type: "text", text: "กรุณาระบุ ชื่อ-เบอร์โทร-ยูสเซอร์ เดี๋ยวน้องดูแลให้ค่ะ" }];
+    }
+    if (data === "promo_info") {
+      return [{ type: "text", text: "โปรโมชัน/กิจกรรมล่าสุดดูได้ที่หน้าเว็บ หรือสอบถามน้องแอดมินได้เลยค่ะ" }];
+    }
+    if (data === "review_withdraw") {
+      return [{ type: "text", text: await generateWithdrawReviewMessage() }];
+    }
+    if (data === "max_withdraw") {
+      return [{ type: "text", text: await generateMaxWithdrawMessage() }];
+    }
+    if (data === "top_game") {
+      return [{ type: "text", text: await generateTopGameMessage() }];
+    }
+    if (data === "referral_commission") {
+      return [{ type: "text", text: await generateReferralCommissionMessage() }];
+    }
+    return [{ type: "text", text: "ขออภัยค่ะ ไม่พบคำสั่งที่เลือก กรุณาลองใหม่ค่ะ" }];
+  }
+
+  // --------- POSTBACK FLOW ต่อ (เช่น กด "ฝาก/ถอน" แล้วรอตอบปัญหา)
+  if (state.formStep === "deposit_problem") {
+    await notifyAdmin(event, `ลูกค้าแจ้งปัญหาฝาก/ถอน: ${text}`);
+    updateUserState(userId, { formStep: null });
+    return [{ type: "text", text: "ได้รับข้อมูลปัญหาฝาก/ถอนแล้ว น้องจะประสานงานกับแอดมินให้นะคะ 💕" }];
+  }
+  if (state.formStep === "forgot_password") {
+    await notifyAdmin(event, `ลืมรหัสผ่าน: ${text}`);
+    updateUserState(userId, { formStep: null });
+    return [{ type: "text", text: "ได้รับข้อมูลแล้ว เดี๋ยวน้องดูแลให้นะคะ รอสักครู่ค่ะ 💕" }];
+  }
+
+  // -------------------- GREETING + FLEX --------------------
+  const assistantName = pickAssistantName(userId, state);
+  if (
+    (event.type === "follow" && shouldGreet(userId)) ||
+    (["สวัสดี", "hello", "hi"].includes(text.toLowerCase()))
+  ) {
+    updateUserState(userId, { lastFlexSent: Date.now(), lastGreeted: Date.now() });
+    await notifyAdmin(event, "ลูกค้าเพิ่มเพื่อนใหม่หรือทักทาย");
+    return [
+      { type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() },
+      { type: "text", text: `สวัสดีค่ะ ${assistantName} เป็นแอดมินดูแลลูกค้าของเว็บ PGTHAI289 นะคะ 💕` }
+    ];
+  }
+  if (event.type === "message" && shouldSendFlex(userId)) {
+    updateUserState(userId, { lastFlexSent: Date.now() });
+    return [{ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() }];
+  }
+
+  // --------- Q&A, GPT ---------
   let realData = "";
   if (text.includes("หวย") || text.includes("เลขเด็ด")) realData = await fetchRealData("เลขเด็ด หวยไทยรัฐ งวดนี้");
   else if (text.includes("ผลบอล") || text.includes("ฟุตบอล")) realData = await fetchRealData("ผลบอลวันนี้");
   else if (text.includes("ข่าว") || text.includes("วันนี้")) realData = await fetchRealData("ข่าวล่าสุดวันนี้");
   else if (text.length > 2) realData = await fetchRealData(text);
 
-  // Handle short replies with some auto followup messages
-  const shortReplies = ["ครับ", "คับ", "ค่ะ", "คะ", "ค่า", "เค", "ok", "โอเค", "ครับผม", "ค่ะจ้า"];
-  if (shortReplies.includes(text.toLowerCase())) {
-    state.caseFollowUpCount = (state.caseFollowUpCount || 0) + 1;
-    updateUserState(userId, state);
-    if (state.caseFollowUpCount === 1) {
-      return [{ type: "text", text: `ยินดีดูแลพี่เสมอนะคะ 💕 หากมีปัญหาหรือข้อสงสัยแจ้งได้เลยน้า เว็บ PGTHAI289 มั่นคง ปลอดภัย ถอนได้หลักล้านไวมากค่ะ ✨` }];
-    }
-    if (state.caseFollowUpCount === 2) {
-      setTimeout(() => {
-        lineClient.pushMessage(userId, {
-          type: "text",
-          text: `อยู่ดูแลพี่อยู่นะคะ 💕 ถ้ามีอะไรเพิ่มเติมถามได้เลยน้า เว็บ PGTHAI289 ฝาก-ถอนไว เล่นง่าย และถอนได้หลักล้านแบบชัวร์ๆ เลยค่ะ ✨`
-        });
-      }, 3000);
-      return [];
-    }
-    if (state.caseFollowUpCount >= 3) {
-      setTimeout(() => {
-        lineClient.pushMessage(userId, {
-          type: "text",
-          text: `ถ้าพี่มีคำถามเพิ่มเติม พร้อมช่วยดูแลเสมอนะคะ 🥰 และอย่าลืมชวนเพื่อนมาเล่น PGTHAI289 รับค่าคอมทุกวันด้วยน้า 💕`
-        });
-      }, 3000);
-      state.caseFollowUpCount = 0;
-      updateUserState(userId, state);
-      return [];
-    }
-  }
-
-  // Greet user on follow or hello
-  if (
-    (event.type === "follow" && shouldGreet(userId)) ||
-    (["สวัสดี", "hello", "hi"].includes(text.toLowerCase()))
-  ) {
-    reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
-    reply.push({ type: "text", text: `สวัสดีค่ะ ${assistantName} เป็นแอดมินดูแลลูกค้าของเว็บ PGTHAI289 นะคะ 💕` });
-    updateUserState(userId, { lastFlexSent: Date.now(), lastGreeted: Date.now() });
-    await notifyAdmin(event, "ลูกค้าเพิ่มเพื่อนใหม่หรือทักทาย");
-    return reply;
-  }
-
-  // Show flex menu if cooldown passed
-  if (event.type === "message" && shouldSendFlex(userId)) {
-    reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
-    updateUserState(userId, { lastFlexSent: Date.now() });
-  }
-
-  // Prepare GPT prompt
   let gptPrompt;
   if (detectNegative(text)) {
     logNegativeToTelegram(userId, text);
@@ -430,16 +396,13 @@ ${realData}
     console.error('GPT Error:', err);
     gptReply = `พร้อมดูแลพี่เสมอนะคะ 💕 หากมีปัญหาสอบถามได้เลยน้า`;
   }
-  reply.push({ type: "text", text: gptReply });
-
   state.chatHistory.push({ role: "assistant", content: gptReply });
   updateUserState(userId, state);
-
   await notifyAdmin(event, text || "ลูกค้าส่งข้อความ/รูป");
-  return reply;
+  return [{ type: "text", text: gptReply }];
 }
 
-/* =========== CRM FOLLOW-UP ============ */
+// --------- CRM FOLLOW-UP (ACTIVE) ---------
 function initCRM(lineClient) {
   setInterval(async () => {
     const now = Date.now();
@@ -470,4 +433,5 @@ function initCRM(lineClient) {
   }, 6 * 60 * 60 * 1000);
 }
 
-export { initCRM, handleCustomerFlow };
+// ----------------- EXPORT -----------------
+export { handleCustomerFlow, createFlexMenuContents, initCRM };
