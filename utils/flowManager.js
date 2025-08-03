@@ -182,6 +182,7 @@ async function generateReferralCommissionMessage() {
   return `🤝 ค่าคอมมิชชั่นแนะนำเพื่อน\n\n${lines.join("\n")}\n\n💡 ชวนเพื่อนมาเล่น รับค่าคอมทุกวัน!`;
 }
 
+/* ================== FLEX MENU (4 ปุ่ม) ================== */
 function createFlexMenuContents() {
   return {
     type: "carousel",
@@ -283,12 +284,12 @@ async function handleCustomerFlow(event, lineClient) {
     reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
     return reply;
   }
- if (userPausedStates[userId]) {
+  if (userPausedStates[userId]) {
     // ถ้าอยู่ในโหมด pause ห้ามตอบอะไรเลย ปล่อยให้แอดมินตัวจริงดูแล
     return [];
   }
 
-  // ========== LOCKED ASSISTANT NAME ==========
+  // LOCKED ASSISTANT NAME
   const assistantName = pickAssistantName(userId, state);
 
   // fetch ข้อมูลจริง (หวย/ข่าว/บอล/ทั่วไป)
@@ -363,7 +364,7 @@ async function handleCustomerFlow(event, lineClient) {
 
   // รับข้อมูลภาพหรือข้อความในเคส admin
   if (state.currentCase && (text.length > 3 || event.message?.type === "image")) {
-    reply.push({ type: "text", text: "ได้รับข้อมูลแล้วค่ะ กำลังส่งให้หัวหน้าฝ่ายดำเนินการ 💕" });
+    reply.push({ type: "text", text: "ได้รับข้อมูลแล้วประสานงานหัวหน้าฝ่ายทำรายการให้ค่ะ 💕" });
     userPausedStates[userId] = true;
     await notifyAdmin(event, `ข้อมูลจากลูกค้า (เคส ${state.currentCase}): ${text || "ส่งรูป"}`);
     return reply;
