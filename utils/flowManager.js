@@ -296,12 +296,14 @@ async function handleCustomerFlow(event, lineClient) {
   console.log(`[PAUSE DEBUG] userId=${userId} isPaused=${!!userPausedStates[userId]} currentCase=${state.currentCase}`);
   console.log(`[PAUSE DEBUG] text='${text}' normalized='${normalizedText}'`);
 
+  // Command to reset pause status (for admin/testing)
   if (/resetpause/.test(normalizedText)) {
     resetUserPauseState(userId);
     reply.push({ type: "text", text: "ระบบได้รีเซ็ตสถานะ pause ให้เรียบร้อยแล้วค่ะ" });
     return reply;
   }
 
+  // Detect pause keywords to enable pause mode
   if (pauseKeywords.some(keyword => normalizedText.includes(keyword.replace(/\s/g, "")))) {
     userPausedStates[userId] = true;
     updateUserState(userId, { currentCase: "admin_case" });
@@ -309,6 +311,7 @@ async function handleCustomerFlow(event, lineClient) {
     return reply;
   }
 
+  // Detect unpause keywords to disable pause mode
   if (userPausedStates[userId] && unpauseKeywords.some(keyword => normalizedText.includes(keyword))) {
     resetUserPauseState(userId);
     reply.push({ type: "text", text: "ยินดีให้บริการตลอด 24 ชั่วโมงเลยนะคะ ถ้ามีคำถามหรือปัญหาเพิ่มเติม แจ้งน้องได้เลยค่ะ 💖" });
@@ -316,17 +319,20 @@ async function handleCustomerFlow(event, lineClient) {
     return reply;
   }
 
+  // If paused and user sends message/image, notify admin and acknowledge
   if (userPausedStates[userId] && state.currentCase === "admin_case" && (text.length > 3 || event.message?.type === "image")) {
     reply.push({ type: "text", text: "ได้รับข้อมูลแล้วค่ะ น้องจะประสานงานกับหัวหน้าฝ่ายให้เรียบร้อยแล้วนะคะ 💕" });
     await notifyAdmin(event, `ข้อมูลจากลูกค้า (เคส ${state.currentCase}): ${text || "ส่งรูป"}`);
     return reply;
   }
 
+  // If paused and none of above, ignore messages (no reply)
   if (userPausedStates[userId]) {
     console.log(`[PAUSE DEBUG] Pause mode active, ไม่ตอบข้อความอื่น userId=${userId}`);
     return [];
   }
 
+  // Normal conversation flow starts here:
   const assistantName = pickAssistantName(userId, state);
 
   let realData = "";
@@ -335,6 +341,7 @@ async function handleCustomerFlow(event, lineClient) {
   else if (text.includes("ข่าว") || text.includes("วันนี้")) realData = await fetchRealData("ข่าวล่าสุดวันนี้");
   else if (text.length > 2) realData = await fetchRealData(text);
 
+  // Handle short replies with some auto followup messages
   const shortReplies = ["ครับ", "คับ", "ค่ะ", "คะ", "ค่า", "เค", "ok", "โอเค", "ครับผม", "ค่ะจ้า"];
   if (shortReplies.includes(text.toLowerCase())) {
     state.caseFollowUpCount = (state.caseFollowUpCount || 0) + 1;
@@ -364,6 +371,7 @@ async function handleCustomerFlow(event, lineClient) {
     }
   }
 
+  // Greet user on follow or hello
   if (
     (event.type === "follow" && shouldGreet(userId)) ||
     (["สวัสดี", "hello", "hi"].includes(text.toLowerCase()))
@@ -375,11 +383,13 @@ async function handleCustomerFlow(event, lineClient) {
     return reply;
   }
 
+  // Show flex menu if cooldown passed
   if (event.type === "message" && shouldSendFlex(userId)) {
     reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
     updateUserState(userId, { lastFlexSent: Date.now() });
   }
 
+  // Prepare GPT prompt
   let gptPrompt;
   if (detectNegative(text)) {
     logNegativeToTelegram(userId, text);
