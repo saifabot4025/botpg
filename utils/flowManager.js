@@ -64,7 +64,7 @@ async function notifyAdmin(event, msg) {
     await sendTelegramAlert(`📢 แจ้งเตือนจาก ${oa}\n👤 ลูกค้า: ${name}\n💬 ข้อความ: ${msg});
     if (event.message?.type === "image") {
       const photo = await getLineImage(event.message.id);
-      if (photo) await sendTelegramPhoto(photo, `📷 รูปจากลูกค้า (${name}));
+      if (photo); await sendTelegramPhoto(photo, `📷 รูปจากลูกค้า (${name}));
     }
   } catch (err) { console.error("notifyAdmin error:", err); }
 }
@@ -77,7 +77,7 @@ async function generateWithdrawReviewMessage() {
     const amt = (Math.floor(Math.random()*45000)+5000).toLocaleString();
     reviews.push(`ยูส ${phone} ถอน ${amt});
   }
-  return `📊 รีวิวการถอนล่าสุด\n\n${reviews.join("\n")}\n\nเว็บมั่นคง ปลอดภัย จ่ายจริง 💕;
+  return `📊 รีวิวการถอนล่าสุด\n\n${reviews.join("\n")}\n\nเว็บมั่นคง ปลอดภัย จ่ายจริง 💕;`
 }
 
 async function generateMaxWithdrawMessage() {
@@ -98,7 +98,7 @@ async function generateMaxWithdrawMessage() {
     global.cachedAmt = Math.floor(Math.random() * 200000) + 300000;
   }
 
-  return 👑 ยอดถอนสูงสุดวันนี้\n\nยินดีกับคุณ "${global.cachedName}" ยูส ${randomMaskedPhone()} ถอน ${global.cachedAmt.toLocaleString()} บาท\nวันที่ ${today};
+  return `👑 ยอดถอนสูงสุดวันนี้\n\nยินดีกับคุณ "${global.cachedName}" ยูส ${randomMaskedPhone()} ถอน ${global.cachedAmt.toLocaleString()} บาท\nวันที่ ${today};`
 }
 
 async function generateTopGameMessage() {
@@ -123,7 +123,7 @@ async function generateTopGameMessage() {
   const freeSpin = Math.floor(Math.random()*(500000-50000))+50000;
   const normal = Math.floor(Math.random()*(50000-5000))+5000;
   let msg = "🎲 เกมสล็อตแตกบ่อยวันนี้\n\n";
-  selected.forEach((g,i)=>msg += ${i+1}. ${g} - ${Math.floor(Math.random()*20)+80}%\n);
+  selected.forEach((g,i)=> msg += `${i+1}. ${g} - ${Math.floor(Math.random()*20)+80}%\n);
   msg += \n💥 ฟรีสปินแตกล่าสุด: ${freeSpin.toLocaleString()} บาท\n💥 ปั่นธรรมดาแตกล่าสุด: ${normal.toLocaleString()} บาท\nเล่นเลย แตกง่าย จ่ายจริง 💕;
   return msg;
 }
@@ -135,7 +135,7 @@ async function generateReferralCommissionMessage() {
     const amt=(Math.floor(Math.random()*97000)+3000).toLocaleString();
     lines.push(`ยูส ${phone} ได้ค่าคอมมิชชั่น ${amt});
   }
-  return 🤝 ค่าคอมมิชชั่นแนะนำเพื่อน\n\n${lines.join("\n")}\n\n💡 ชวนเพื่อนมาเล่น รับค่าคอมทุกวัน!;
+  return `🤝 ค่าคอมมิชชั่นแนะนำเพื่อน\n\n${lines.join("\n")}\n\n💡 ชวนเพื่อนมาเล่น รับค่าคอมทุกวัน!;`
 }
 
 /* ================== FLEX ================== */
