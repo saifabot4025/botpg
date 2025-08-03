@@ -4,13 +4,14 @@ import { sendTelegramAlert, sendTelegramPhoto, getLineProfile } from "../service
 import { getLineImage } from "../services/lineMediaService.js";
 import { staffNames } from "../utils/staffNames.js";
 
+// STATE & GLOBAL
 const userStates = {};
 const flexCooldown = 2 * 60 * 60 * 1000; // 2 ชม.
 const greetCooldown = 10 * 60 * 1000;
 const nameLockMinutes = 10;
+let globalPause = false; // pause ทั้งห้อง
 
-let globalPause = false;
-
+// KEYWORDS
 const pauseKeywords = [
   "แอดมินรับเคสแล้ว", "แอดมินกำลังดูแล", "หัวหน้าแอดมินรับเคส", "แอดมินกำลังดำเนินการ",
   "รับเคสแล้วค่ะ", "รับเรื่องแล้วนะคะ", "แอดมินกำลังช่วยอยู่", "กำลังตรวจสอบให้ค่ะ",
@@ -23,7 +24,7 @@ const unpauseKeywords = [
   "เรียบร้อยแล้วนะคะ", "เสร็จแล้วค่ะ", "เคสเสร็จเรียบร้อยค่ะ"
 ].map(k => k.replace(/\s/g, ""));
 
-// ---------- UTILS ----------
+// UTILS
 function getUserState(userId) {
   if (!userStates[userId]) {
     userStates[userId] = {
@@ -218,7 +219,7 @@ function createFlexMenuContents() {
   };
 }
 
-// ===== MAIN FLOW =====
+// MAIN FLOW
 async function handleCustomerFlow(event, lineClient) {
   const userId = event.source?.userId;
   const state = getUserState(userId);
@@ -226,7 +227,7 @@ async function handleCustomerFlow(event, lineClient) {
   const text = event.message?.text?.trim() || "";
   const normalizedText = text.toLowerCase().replace(/\s/g, "");
 
-  // GLOBAL PAUSE/UNPAUSE จับข้อความ "ทั้งห้อง"
+  // ========== PAUSE / UNPAUSE (GLOBAL) ==========
   if (pauseKeywords.some(k => normalizedText.includes(k.replace(/\s/g, "")))) {
     globalPause = true;
     await sendTelegramAlert(`[PAUSE] (GLOBAL) ห้องนี้ถูก pause`);
@@ -242,8 +243,6 @@ async function handleCustomerFlow(event, lineClient) {
   }
   if (globalPause) return [];
 
-  // ต่อด้วย logic รับข้อมูล/postback/CRM/FLEX/ฯลฯ ตามเวอร์ชั่นที่เคยให้
-
   // ทักทาย/เพิ่มเพื่อน
   const assistantName = pickAssistantName(userId, state);
   if (
@@ -258,7 +257,7 @@ async function handleCustomerFlow(event, lineClient) {
     ];
   }
 
-  // กดปุ่ม postback
+  // ปุ่ม postback (FLEX)
   if (event.type === "postback") {
     const data = event.postback.data;
     if (data === "register_admin") {
@@ -282,7 +281,7 @@ async function handleCustomerFlow(event, lineClient) {
     if (data === "referral_commission") return [{ type: "text", text: await generateReferralCommissionMessage() }];
   }
 
-  // รับข้อมูล (ฟอร์ม)
+  // รับข้อมูลฟอร์มสมัคร/แจ้งปัญหา
   if (state.formStatus === "register" && text.length > 10) {
     await notifyAdmin(event, `ข้อมูลสมัครสมาชิก: ${text}`);
     updateUserState(userId, { formStatus: null });
@@ -305,7 +304,7 @@ async function handleCustomerFlow(event, lineClient) {
     return [{ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() }];
   }
 
-  // ============ GPT ตอบฉลาด + ข้อมูลจริง + คำหยาบ ============
+  // GPT + ข้อมูลจริง + คำหยาบ
   let realData = "";
   if (text.includes("หวย") || text.includes("เลขเด็ด")) realData = await fetchRealData("เลขเด็ด หวยไทยรัฐ งวดนี้");
   else if (text.includes("ผลบอล") || text.includes("ฟุตบอล")) realData = await fetchRealData("ผลบอลวันนี้");
@@ -344,7 +343,6 @@ ${realData}
 ข้อความจากลูกค้า: "${text}"
 `;
   }
-
   let gptReply = '';
   try {
     gptReply = await getCuteDynamicReply(gptPrompt, assistantName);
@@ -358,7 +356,7 @@ ${realData}
   return [{ type: "text", text: gptReply }];
 }
 
-// ==== CRM FOLLOW-UP ====
+// CRM FOLLOW-UP
 function initCRM(lineClient) {
   setInterval(async () => {
     const now = Date.now();
@@ -389,5 +387,4 @@ function initCRM(lineClient) {
   }, 6 * 60 * 60 * 1000);
 }
 
-// ==== EXPORT ====
 export { handleCustomerFlow, createFlexMenuContents, initCRM };
