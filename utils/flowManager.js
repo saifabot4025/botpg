@@ -463,7 +463,7 @@ export function getBotHealthStatus() {
   };
 }
 
-module.exports = {
+export {
   handleCustomerFlow,
   tryResumeFromPause,
   createFlexMenuContents,
