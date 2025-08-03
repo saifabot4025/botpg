@@ -1,4 +1,5 @@
 /* ================== FLOW MANAGER (FINAL PRO VERSION) ================== */
+import fetch from "node-fetch";
 import { getCuteDynamicReply } from "../services/gptService.js";
 import { sendTelegramAlert, sendTelegramPhoto, getLineProfile } from "../services/telegramService.js";
 import { getLineImage } from "../services/lineMediaService.js";
@@ -19,7 +20,9 @@ function getUserState(userId) {
       caseData: {},
       lastActive: Date.now(),
       chatHistory: [],
-      totalDeposit: 0
+      totalDeposit: 0,
+      assistantName: null,
+      caseFollowUpCount: 0,
     };
   }
   return userStates[userId];
@@ -39,21 +42,21 @@ function shouldGreet(userId) {
   return Date.now() - state.lastGreeted > greetCooldown;
 }
 
+function resetUserPauseState(userId) {
+  userPausedStates[userId] = false;
+  updateUserState(userId, {
+    currentCase: null,
+    caseData: {},
+    caseFollowUpCount: 0,
+    lastGreeted: 0
+  });
+}
+
 /* ================== UTILITIES ================== */
 function randomMaskedPhone() {
   const prefix = "08";
   const suffix = Math.floor(1000 + Math.random() * 9000);
   return `${prefix}xxxx${suffix}`;
-}
-
-async function getRandomName() {
-  try {
-    const name = await getCuteDynamicReply("สุ่มชื่อเล่นคนไทย 1 ชื่อ ตอบแค่ชื่อ");
-    return name.replace(/\n/g, "").trim();
-  } catch {
-    const fallback = ["ฟ้า", "น้ำตาล", "กิ๊ฟ", "ฝน", "น้องเนย", "พิม", "จ๋า", "ขนม", "ฝ้าย", "เกด"];
-    return fallback[Math.floor(Math.random() * fallback.length)];
-  }
 }
 
 async function notifyAdmin(event, msg) {
@@ -67,6 +70,35 @@ async function notifyAdmin(event, msg) {
       if (photo) await sendTelegramPhoto(photo, `📷 รูปจากลูกค้า (${name})`);
     }
   } catch (err) { console.error("notifyAdmin error:", err); }
+}
+
+// =========== เช็คข้อความเชิงลบ/คำแรง ===========
+function detectNegative(text) {
+  const negatives = [
+    "โกง", "ขโมย", "ไม่จ่าย", "ถอนเงินไม่ได้", "แย่", "เสียใจ", "โมโห", "หัวร้อน",
+    "โดนโกง", "ไม่ยอมโอน", "โดนหลอก", "บริการแย่", "จะฟ้อง", "ไม่คืนเงิน", "เว็บเถื่อน", "ไม่โปร่งใส"
+  ];
+  return negatives.some(word => text.includes(word));
+}
+
+// ================= FETCH REAL DATA (Google/ข่าว/หวย/บอล) ================
+async function fetchRealData(query) {
+  try {
+    const encodedQuery = encodeURIComponent(query);
+    const url = `https://www.google.com/search?q=${encodedQuery}`;
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+      }
+    });
+    const html = await res.text();
+    const match = html.match(/<span class="BNeawe[^>]*>(.*?)<\/span>/);
+    return match ? match[1] : "ไม่พบข้อมูลที่เกี่ยวข้อง";
+  } catch (err) {
+    console.error("fetchRealData Error:", err);
+    return "ไม่สามารถค้นหาข้อมูลได้";
+  }
 }
 
 /* ================== MESSAGE GENERATORS ================== */
@@ -140,7 +172,7 @@ function createFlexMenuContents() {
   return {
     type: "carousel",
     contents: [
-      // 📦 BOX 1 – สมัครสมาชิก + Login
+      // --- BOX 1: สมัครสมาชิก + Login
       {
         type: "bubble",
         hero: {
@@ -153,16 +185,13 @@ function createFlexMenuContents() {
         body: {
           type: "box",
           layout: "vertical",
-          backgroundColor: "#4B0082", // ม่วงเข้ม
+          backgroundColor: "#4B0082",
           contents: [
             { type: "text", text: "สมัครสมาชิก + Login", weight: "bold", size: "lg", color: "#FFFFFF" },
             {
               type: "text",
               text: "เว็บเราสมัครฟรีไม่มีค่าใช้จ่าย หากติดขัดปัญหาด้านใดยินดีบริการ 24 ชั่วโมง",
-              size: "sm",
-              color: "#FFFFFF",
-              wrap: true,
-              margin: "md",
+              size: "sm", color: "#FFFFFF", wrap: true, margin: "md",
             },
           ],
         },
@@ -173,42 +202,31 @@ function createFlexMenuContents() {
           spacing: "sm",
           contents: [
             {
-              type: "button",
-              style: "primary",
-              color: "#000000",
+              type: "button", style: "primary", color: "#000000",
               action: {
-                type: "uri",
-                label: "⭐ สมัครเอง",
+                type: "uri", label: "⭐ สมัครเอง",
                 uri: "https://pgthai289.net/customer/register/LINEBOT/?openExternalBrowser=1",
               },
             },
             {
-              type: "button",
-              style: "secondary",
-              color: "#FFD700",
+              type: "button", style: "secondary", color: "#FFD700",
               action: { type: "postback", label: "📲 ให้แอดมินสมัครให้", data: "register_admin" },
             },
             {
-              type: "button",
-              style: "primary",
-              color: "#000000",
+              type: "button", style: "primary", color: "#000000",
               action: {
-                type: "uri",
-                label: "🔑 ทางเข้าเล่นหลัก",
+                type: "uri", label: "🔑 ทางเข้าเล่นหลัก",
                 uri: "https://pgthai289.net/?openExternalBrowser=1",
               },
             },
             {
-              type: "button",
-              style: "secondary",
-              color: "#FFD700",
+              type: "button", style: "secondary", color: "#FFD700",
               action: { type: "postback", label: "🚪 ทางเข้าเล่นสำรอง", data: "login_backup" },
             },
           ],
         },
       },
-
-      // 📦 BOX 2 – แจ้งปัญหาการใช้งาน
+      // --- BOX 2: แจ้งปัญหา
       {
         type: "bubble",
         hero: {
@@ -219,56 +237,26 @@ function createFlexMenuContents() {
           aspectMode: "cover",
         },
         body: {
-          type: "box",
-          layout: "vertical",
-          backgroundColor: "#4B0082",
+          type: "box", layout: "vertical", backgroundColor: "#4B0082",
           contents: [
             { type: "text", text: "แจ้งปัญหาการใช้งาน", weight: "bold", size: "lg", color: "#FFFFFF" },
             {
-              type: "text",
-              text: "แจ้งปัญหาการใช้งาน แอดมินพร้อมดูแลตลอด 24 ชั่วโมงเลยนะคะ",
-              size: "sm",
-              color: "#FFFFFF",
-              wrap: true,
-              margin: "md",
+              type: "text", text: "แจ้งปัญหาการใช้งาน แอดมินพร้อมดูแลตลอด 24 ชั่วโมงเลยนะคะ",
+              size: "sm", color: "#FFFFFF", wrap: true, margin: "md",
             },
           ],
         },
         footer: {
-          type: "box",
-          layout: "vertical",
-          backgroundColor: "#4B0082",
-          spacing: "sm",
+          type: "box", layout: "vertical", backgroundColor: "#4B0082", spacing: "sm",
           contents: [
-            {
-              type: "button",
-              style: "primary",
-              color: "#000000",
-              action: { type: "postback", label: "💰 ปัญหาฝาก/ถอน", data: "issue_deposit" },
-            },
-            {
-              type: "button",
-              style: "secondary",
-              color: "#FFD700",
-              action: { type: "postback", label: "🔑 ลืมรหัสผ่าน", data: "forgot_password" },
-            },
-            {
-              type: "button",
-              style: "primary",
-              color: "#000000",
-              action: { type: "postback", label: "🚪 เข้าเล่นไม่ได้", data: "login_backup" },
-            },
-            {
-              type: "button",
-              style: "secondary",
-              color: "#FFD700",
-              action: { type: "postback", label: "🎁 โปรโมชั่น/กิจกรรม", data: "promo_info" },
-            },
+            { type: "button", style: "primary", color: "#000000", action: { type: "postback", label: "💰 ปัญหาฝาก/ถอน", data: "issue_deposit" } },
+            { type: "button", style: "secondary", color: "#FFD700", action: { type: "postback", label: "🔑 ลืมรหัสผ่าน", data: "forgot_password" } },
+            { type: "button", style: "primary", color: "#000000", action: { type: "postback", label: "🚪 เข้าเล่นไม่ได้", data: "login_backup" } },
+            { type: "button", style: "secondary", color: "#FFD700", action: { type: "postback", label: "🎁 โปรโมชั่น/กิจกรรม", data: "promo_info" } },
           ],
         },
       },
-
-      // 📦 BOX 3 – รีวิวการถอน + โบนัสไทม์
+      // --- BOX 3: รีวิวการถอน + โบนัสไทม์
       {
         type: "bubble",
         hero: {
@@ -279,51 +267,22 @@ function createFlexMenuContents() {
           aspectMode: "cover",
         },
         body: {
-          type: "box",
-          layout: "vertical",
-          backgroundColor: "#4B0082",
+          type: "box", layout: "vertical", backgroundColor: "#4B0082",
           contents: [
             { type: "text", text: "รีวิวการถอน + โบนัสไทม์", weight: "bold", size: "lg", color: "#FFFFFF" },
             {
-              type: "text",
-              text: "รีวิวการถอน+โบนัสไทม์ เว็บเราจ่ายชัวร์หลักร้อยหรือล้านก็ไวไร้ประวัติโกง",
-              size: "sm",
-              color: "#FFFFFF",
-              wrap: true,
-              margin: "md",
+              type: "text", text: "รีวิวการถอน+โบนัสไทม์ เว็บเราจ่ายชัวร์หลักร้อยหรือล้านก็ไวไร้ประวัติโกง",
+              size: "sm", color: "#FFFFFF", wrap: true, margin: "md",
             },
           ],
         },
         footer: {
-          type: "box",
-          layout: "vertical",
-          backgroundColor: "#4B0082",
-          spacing: "sm",
+          type: "box", layout: "vertical", backgroundColor: "#4B0082", spacing: "sm",
           contents: [
-            {
-              type: "button",
-              style: "primary",
-              color: "#000000",
-              action: { type: "postback", label: "⭐ รีวิวถอนล่าสุด", data: "review_withdraw" },
-            },
-            {
-              type: "button",
-              style: "secondary",
-              color: "#FFD700",
-              action: { type: "postback", label: "👑 ถอนสูงสุดวันนี้", data: "max_withdraw" },
-            },
-            {
-              type: "button",
-              style: "primary",
-              color: "#000000",
-              action: { type: "postback", label: "🎮 เกมแตกบ่อย", data: "top_game" },
-            },
-            {
-              type: "button",
-              style: "secondary",
-              color: "#FFD700",
-              action: { type: "postback", label: "💎 ค่าคอมแนะนำเพื่อน", data: "referral_commission" },
-            },
+            { type: "button", style: "primary", color: "#000000", action: { type: "postback", label: "⭐ รีวิวถอนล่าสุด", data: "review_withdraw" } },
+            { type: "button", style: "secondary", color: "#FFD700", action: { type: "postback", label: "👑 ถอนสูงสุดวันนี้", data: "max_withdraw" } },
+            { type: "button", style: "primary", color: "#000000", action: { type: "postback", label: "🎮 เกมแตกบ่อย", data: "top_game" } },
+            { type: "button", style: "secondary", color: "#FFD700", action: { type: "postback", label: "💎 ค่าคอมแนะนำเพื่อน", data: "referral_commission" } },
           ],
         },
       },
@@ -335,43 +294,19 @@ function limitSentences(text, maxSentences = 2) {
   const sentences = text.split(/(?<=[.!?])\s+/);
   return sentences.slice(0, maxSentences).join(" ");
 }
-
 function sanitizeReply(reply, assistantName) {
   return reply.replace(/น้อง[^\s]+/g, assistantName);
 }
 
-/* ================== MAIN FLOW ================== */
-async function handleCustomerFlow(event) {
+/* ================== MAIN CUSTOMER FLOW ================== */
+async function handleCustomerFlow(event, lineClient) {
   const userId = event.source?.userId;
   const state = getUserState(userId);
   updateUserState(userId, { lastActive: Date.now() });
   const reply = [];
   const text = event.message?.text?.trim() || "";
 
-  // ✅ ตรวจจับคำด่า/ข้อความเชิงลบ
-  const negativeWords = [
-    "โกง", "เว็บโกง", "เว็บห่วย", "ขี้โกง", "ไม่จ่าย", "เชิดเงิน", "เว็บไม่ดี", "โดนโกง",
-    "แม่ง", "สัส", "เหี้ย", "ชิบหาย", "กาก", "เลว", "ไอ้", "โง่", "ควย", "ฟาย",
-    "หมดตัว", "เสียหมด", "ทุนหาย", "หมดกำลังใจ", "เจ๊ง", "ไม่เหลือ", "โดนกินหมด",
-    "เว็บเชี้ย", "เว็บควย", "เล่นไม่แตก", "ไม่แตก", "ไม่แจก", "ห่วยแตก", "เว็บแย่",
-    "ทำไมไม่จ่าย", "เว็บขยะ", "เสียหมดตูด", "เล่นหมด", "เงินหมด", "เล่นแล้วเจ๊ง"
-  ];
-  const containsNegative = negativeWords.some(word => text.includes(word));
-  if (containsNegative) {
-    const apologyReply = await getCuteDynamicReply(
-      `บทบาท: เป็นแอดมินสาวมืออาชีพของ PGTHAI289
-สิ่งที่ต้องทำ:
-1. ฟังความรู้สึกลูกค้าและเข้าใจความผิดหวังหรืออารมณ์เสีย
-2. ถ้าลูกค้าหาว่าเว็บโกง ให้ยืนยันว่า PGTHAI289 มั่นคง ปลอดภัย มีประวัติการจ่ายจริง ฝาก-ถอนได้แน่นอน
-3. ถ้าลูกค้าเสียเยอะ ให้ปลอบใจด้วยน้ำเสียงอบอุ่นและแนะนำให้เล่นอย่างมีสติ
-4. เชิญชวนให้ลูกค้าสอบถามหรือขอความช่วยเหลือได้ 24 ชั่วโมง
-5. ตอบสั้น กระชับ และเป็นกันเองไม่เกิน 2 ประโยค
-ข้อความจากลูกค้า: "${text}"`
-    );
-    return [{ type: "text", text: apologyReply }];
-  }
-
-  // ✅ ถ้าแอดมินพิมพ์ว่า "หัวหน้าแอดมินรับเคสค่ะ" → ให้บอทหยุดตอบทันที
+  // == Pause / Unpause Logic ==
   if (text.replace(/\s/g, "").includes("หัวหน้าแอดมินรับเคสค่ะ")) {
     userPausedStates[userId] = true;
     updateUserState(userId, { currentCase: "admin_case" });
@@ -380,8 +315,6 @@ async function handleCustomerFlow(event) {
       text: "หัวหน้าแอดมินกำลังดูแลพี่อยู่น้า น้องส่งต่อให้เรียบร้อยค่ะ 💕"
     }];
   }
-
-  // ✅ ถ้าอยู่ในโหมด pause → ตรวจว่ามีข้อความจากแอดมินให้กลับมาทำงาน
   if (userPausedStates[userId]) {
     const normalizedText = text.replace(/\s/g, "").trim();
     const keywords = [
@@ -390,14 +323,13 @@ async function handleCustomerFlow(event) {
       "เคสนี้เรียบร้อยแล้ว", "จัดการเสร็จแล้ว", "ดำเนินการเรียบร้อย"
     ];
     if (keywords.some(keyword => normalizedText.includes(keyword))) {
-      userPausedStates[userId] = false;
-      updateUserState(userId, { currentCase: null, caseData: {}, caseFollowUpCount: 0 });
-      return [{
-        type: "text",
-        text: "💕 หากมีปัญหาหรืออยากสอบถามเพิ่มเติม น้องพร้อมดูแล 24 ชม.เลยนะคะ มาสนุกกับ PGTHAI289 กันน้า! 🎰✨ แนะนำเพื่อนมาเล่น รับค่าคอมทุกวันด้วยนะคะ 💖"
-      }];
+      resetUserPauseState(userId);
+      return [
+        { type: "text", text: "💕 หากมีอะไรสอบถามเพิ่มเติม แจ้งน้องได้ตลอด 24 ชั่วโมงเลยนะคะ มาสนุกกับ PGTHAI289 กันน้า! 🎰✨ แนะนำเพื่อนมาเล่น รับค่าคอมทุกวันด้วยนะคะ 💖" },
+        { type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() }
+      ];
     }
-    // ✅ ถ้ายังรอ → ให้ตอบเป็นสเต็ป
+    // ถ้ายัง pause อยู่ ให้ตอบ follow up step (state.caseFollowUpCount)
     const followUpCount = (state.caseFollowUpCount || 0) + 1;
     updateUserState(userId, { caseFollowUpCount: followUpCount });
     let msg = "";
@@ -413,15 +345,72 @@ async function handleCustomerFlow(event) {
     return [{ type: "text", text: msg }];
   }
 
-  // ✅ ทักทายตอนลูกค้าเพิ่มเพื่อนใหม่
+  // == สร้าง assistantName 1 ครั้ง/Session ==
+  const assistantNames = ["น้องฟาง", "น้องปุย", "น้องแพรว", "น้องมายด์", "น้องบัว", "น้องน้ำหวาน", "น้องแพม", "น้องจ๋า"];
+  function getRandomAssistantName() {
+    return assistantNames[Math.floor(Math.random() * assistantNames.length)];
+  }
+  if (!state.assistantName) {
+    const newName = getRandomAssistantName();
+    updateUserState(userId, { assistantName: newName });
+    state.assistantName = newName;
+  }
+  const assistantName = state.assistantName;
+
+  // == fetch ข้อมูลจริง (หวย/ข่าว/บอล/ทั่วไป) ==
+  let realData = "";
+  if (text.includes("หวย") || text.includes("เลขเด็ด")) {
+    realData = await fetchRealData("เลขเด็ด หวยไทยรัฐ งวดนี้");
+  } else if (text.includes("ผลบอล") || text.includes("ฟุตบอล")) {
+    realData = await fetchRealData("ผลบอลวันนี้");
+  } else if (text.includes("ข่าว") || text.includes("วันนี้")) {
+    realData = await fetchRealData("ข่าวล่าสุดวันนี้");
+  } else if (text.length > 2) {
+    realData = await fetchRealData(text);
+  }
+
+  // == ตอบลูกค้าสั้น (คะ ครับ เค ok) ==
+  const shortReplies = ["ครับ", "คับ", "ค่ะ", "คะ", "ค่า", "เค", "ok", "โอเค", "ครับผม", "ค่ะจ้า"];
+  if (shortReplies.includes(text.toLowerCase())) {
+    state.caseFollowUpCount = (state.caseFollowUpCount || 0) + 1;
+    updateUserState(userId, state);
+    let followUpMsg = "";
+    if (state.caseFollowUpCount === 1) {
+      followUpMsg = `${assistantName} ยินดีดูแลพี่เสมอนะคะ 💕 หากมีปัญหาหรือข้อสงสัยแจ้งได้เลยน้า เว็บ PGTHAI289 มั่นคง ปลอดภัย ถอนได้หลักล้านไวมากค่ะ ✨`;
+      return [{ type: "text", text: followUpMsg }];
+    }
+    if (state.caseFollowUpCount === 2) {
+      setTimeout(() => {
+        lineClient.pushMessage(userId, {
+          type: "text",
+          text: `${assistantName} อยู่ดูแลพี่อยู่นะคะ 💕 ถ้ามีอะไรเพิ่มเติมถามได้เลยน้า เว็บ PGTHAI289 ฝาก-ถอนไว เล่นง่าย และถอนได้หลักล้านแบบชัวร์ๆ เลยค่ะ ✨`
+        });
+      }, 3000);
+      return [];
+    }
+    if (state.caseFollowUpCount >= 3) {
+      setTimeout(() => {
+        lineClient.pushMessage(userId, {
+          type: "text",
+          text: `ถ้าพี่มีคำถามเพิ่มเติม ${assistantName} พร้อมช่วยดูแลเสมอนะคะ 🥰 และอย่าลืมชวนเพื่อนมาเล่น PGTHAI289 รับค่าคอมทุกวันด้วยน้า 💕`
+        });
+      }, 3000);
+      state.caseFollowUpCount = 0;
+      updateUserState(userId, state);
+      return [];
+    }
+  }
+
+  // == ทักทายตอนลูกค้าเพิ่มเพื่อนใหม่
   if (event.type === "follow" && shouldGreet(userId)) {
-    reply.push({ type: "text", text: `สวัสดีค่ะ น้องฟางเป็นแอดมินดูแลลูกค้าของ PGTHAI289 นะคะ 💕` });
+    reply.push({ type: "text", text: `สวัสดีค่ะ ${assistantName} เป็นแอดมินดูแลลูกค้าของ PGTHAI289 นะคะ 💕` });
     reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
     updateUserState(userId, { lastFlexSent: Date.now(), lastGreeted: Date.now() });
     await notifyAdmin(event, "ลูกค้าเพิ่มเพื่อนใหม่");
     return reply;
   }
 
+  // == กดปุ่ม Postback
   if (event.type === "postback" && event.postback?.data) {
     const data = event.postback.data;
     reply.push({ type: "text", text: `✅ คุณกดปุ่ม: ${data}` });
@@ -440,6 +429,7 @@ async function handleCustomerFlow(event) {
     return reply;
   }
 
+  // == รับข้อมูลภาพหรือข้อความในเคส admin ==
   if (state.currentCase && (text.length > 3 || event.message?.type === "image")) {
     reply.push({ type: "text", text: "ได้รับข้อมูลแล้วค่ะ กำลังส่งให้หัวหน้าฝ่ายดำเนินการ 💕" });
     userPausedStates[userId] = true;
@@ -447,62 +437,16 @@ async function handleCustomerFlow(event) {
     return reply;
   }
 
+  // == ส่ง FLEX Menu ระยะเวลา
   if (event.type === "message" && shouldSendFlex(userId)) {
     reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
     updateUserState(userId, { lastFlexSent: Date.now() });
   }
 
-  try {
-    const now = Date.now();
-    const tooSoon = now - state.lastGreeted < 10 * 60 * 1000;
-    // assistantName
-    const assistantNames = ["น้องฟาง", "น้องปุย", "น้องแพรว", "น้องมายด์", "น้องบัว", "น้องน้ำหวาน", "น้องแพม", "น้องจ๋า"];
-    function getRandomAssistantName() {
-      return assistantNames[Math.floor(Math.random() * assistantNames.length)];
-    }
-    if (!state.assistantName || !tooSoon) {
-      const newName = getRandomAssistantName();
-      updateUserState(userId, { assistantName: newName, lastGreeted: now });
-      state.assistantName = newName;
-    }
-    const assistantName = state.assistantName;
-
-    // ✅ ตรวจคำตอบสั้นๆ (ครับ/ค่ะ/ค่า/เค/ok)
-    const shortReplies = ["ครับ", "คับ", "ค่ะ", "คะ", "ค่า", "เค", "ok", "โอเค", "ครับผม", "ค่ะจ้า"];
-    if (shortReplies.includes(text.toLowerCase())) {
-      state.caseFollowUpCount = (state.caseFollowUpCount || 0) + 1;
-      updateUserState(userId, state);
-      let followUpMsg = "";
-      if (state.caseFollowUpCount === 1) {
-        followUpMsg = `${assistantName} ยินดีดูแลพี่เสมอนะคะ 💕 หากมีปัญหาหรือข้อสงสัยแจ้งได้เลยน้า เว็บ PGTHAI289 มั่นคง ปลอดภัย ถอนได้หลักล้านไวมากค่ะ ✨`;
-        return [{ type: "text", text: followUpMsg }];
-      }
-      if (state.caseFollowUpCount === 2) {
-        setTimeout(() => {
-          lineClient.pushMessage(userId, {
-            type: "text",
-            text: `${assistantName} อยู่ดูแลพี่อยู่นะคะ 💕 ถ้ามีอะไรเพิ่มเติมถามได้เลยน้า เว็บ PGTHAI289 ฝาก-ถอนไว เล่นง่าย และถอนได้หลักล้านแบบชัวร์ๆ เลยค่ะ ✨`
-          });
-        }, 3000);
-        return [];
-      }
-      if (state.caseFollowUpCount >= 3) {
-        setTimeout(() => {
-          lineClient.pushMessage(userId, {
-            type: "text",
-            text: `ถ้าพี่มีคำถามเพิ่มเติม ${assistantName} พร้อมช่วยดูแลเสมอนะคะ 🥰 และอย่าลืมชวนเพื่อนมาเล่น PGTHAI289 รับค่าคอมทุกวันด้วยน้า 💕`
-          });
-        }, 3000);
-        state.caseFollowUpCount = 0;
-        updateUserState(userId, state);
-        return [];
-      }
-    }
-
-    // ✅ เรียก GPT
-    let gptPrompt;
-    if (containsNegative) {
-      gptPrompt = `
+  // == สร้าง gptPrompt (เชิงลบ/คำด่า) ==
+  let gptPrompt;
+  if (detectNegative(text)) {
+    gptPrompt = `
 บทบาท: เป็นแอดมินผู้หญิงชื่อ ${assistantName} ของ PGTHAI289
 หน้าที่: ตอบลูกค้าอย่างมืออาชีพ สุภาพ และปลอบใจลูกค้าที่ใช้คำแรงหรือสงสัยว่าเว็บโกง
 สิ่งที่ต้องทำ:
@@ -510,10 +454,13 @@ async function handleCustomerFlow(event) {
 2. อธิบายให้มั่นใจว่าเว็บ PGTHAI289 มั่นคง ปลอดภัย เปิดมานาน และดูแลลูกค้าตลอด 24 ชม.
 3. ใช้คำพูดน่ารัก อบอุ่น อ้อนๆ แต่จริงใจ ไม่เถียง ไม่ประชด
 4. จำกัดไม่เกิน 2 ประโยค
+ข้อมูลจริง:
+${realData}
+
 ข้อความจากลูกค้า: "${text}"
 `;
-    } else {
-      gptPrompt = `
+  } else {
+    gptPrompt = `
 บทบาท: เป็นแอดมินผู้หญิงชื่อ ${assistantName} ของ PGTHAI289
 หน้าที่: ตอบคำถามลูกค้าอย่างฉลาด มืออาชีพ และเป็นกันเอง
 วิธีตอบ:
@@ -523,42 +470,35 @@ async function handleCustomerFlow(event) {
 4. ใช้คำพูดแบบผู้หญิง เช่น ค่ะ จ้า น้า
 5. จำกัดไม่เกิน 2 ประโยค แต่ให้ดูอบอุ่นและชวนคุยต่อ
 6. ถ้าเพิ่งคุยกันไม่เกิน 10 นาที ห้ามเริ่มด้วย "สวัสดี" แต่ให้ต่อเนื่องจากการคุยเดิม
+ข้อมูลจริง:
+${realData}
+
 ข้อความจากลูกค้า: "${text}"
 `;
-    }
-
-    let gptReply = '';
-    try {
-      gptReply = await getCuteDynamicReply(gptPrompt);
-    } catch (err) {
-      console.error('GPT Error:', err);
-      gptReply = `${assistantName} พร้อมดูแลพี่เสมอนะคะ 💕 หากมีปัญหาสอบถามได้เลยน้า`;
-    }
-
-    reply.push({
-      type: "text",
-      text: sanitizeReply(limitSentences(gptReply), assistantName),
-    });
-
-    state.chatHistory.push({ role: "assistant", content: gptReply });
-    updateUserState(userId, state);
-
-    if (gptReply.trim().startsWith("สวัสดี")) {
-      updateUserState(userId, { lastGreeted: now });
-    }
-
-    await notifyAdmin(event, text || "ลูกค้าส่งข้อความ/รูป");
-    return reply;
-  } catch (err) {
-    reply.push({
-      type: "text",
-      text: "ขอโทษนะคะ รบกวนส่งข้อความใหม่ให้น้องอีกครั้งได้ไหมคะ 💕",
-    });
-    return reply;
   }
+
+  // == เรียก GPT & ตอบกลับ ==
+  let gptReply = '';
+  try {
+    gptReply = await getCuteDynamicReply(gptPrompt);
+  } catch (err) {
+    console.error('GPT Error:', err);
+    gptReply = `${assistantName} พร้อมดูแลพี่เสมอนะคะ 💕 หากมีปัญหาสอบถามได้เลยน้า`;
+  }
+
+  reply.push({
+    type: "text",
+    text: sanitizeReply(limitSentences(gptReply), assistantName),
+  });
+
+  state.chatHistory.push({ role: "assistant", content: gptReply });
+  updateUserState(userId, state);
+
+  await notifyAdmin(event, text || "ลูกค้าส่งข้อความ/รูป");
+  return reply;
 }
 
-/* ================== CRM FOLLOW-UP (3,7,15,30 วัน) ================== */
+/* =========== CRM FOLLOW-UP ============ */
 function initCRM(lineClient) {
   setInterval(async () => {
     const now = Date.now();
