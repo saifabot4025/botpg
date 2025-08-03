@@ -519,9 +519,10 @@ if (!state.assistantName || now - state.lastGreeted > 10 * 60 * 1000 || event.ty
 const assistantName = state.assistantName;
 // ✅ สร้าง prompt แบบฉลาด
   let gptPrompt;
+  const historyContext = state.chatHistory.map(h => `${h.role}: ${h.content}`).join('\n');
   if (containsNegative) {
     gptPrompt = 
-`บทบาท: เป็นแอดมินผู้หญิงชื่อ ${assistantName} ของ PGTHAI289\nข้อมูลจริง (ถ้ามี): ${realData}`
+`บทบาท: เป็นแอดมินผู้หญิงชื่อ ${assistantName} ของ PGTHAI289\nประวัติการคุยก่อนหน้า:\n${historyContext}\nข้อมูลจริง (ถ้ามี): ${realData}`
 หน้าที่: ตอบลูกค้าอย่างมืออาชีพ สุภาพ และปลอบใจลูกค้าที่ใช้คำแรงหรือสงสัยว่าเว็บโกง
 สิ่งที่ต้องทำ:
 1. ตอบแบบอ่อนโยน มีความเข้าใจความรู้สึกลูกค้า
@@ -532,7 +533,7 @@ const assistantName = state.assistantName;
 ;
   } else {
     gptPrompt = 
-`บทบาท: เป็นแอดมินผู้หญิงชื่อ ${assistantName} ของ PGTHAI289\nข้อมูลจริง (ถ้ามี): ${realData}`
+`บทบาท: เป็นแอดมินผู้หญิงชื่อ ${assistantName} ของ PGTHAI289\nประวัติการคุยก่อนหน้า:\n${historyContext}\nข้อมูลจริง (ถ้ามี): ${realData}`
 หน้าที่: ตอบคำถามลูกค้าอย่างฉลาด มืออาชีพ และเป็นกันเอง
 วิธีตอบ:
 1. วิเคราะห์คำถามลูกค้าและหาคำตอบที่ตรงกับคำถามให้ก่อน เช่น ถ้าถามเรื่องเพลง ให้แนะนำชื่อเพลงใหม่จริงๆ
