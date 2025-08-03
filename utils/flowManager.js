@@ -208,7 +208,7 @@ async function generateReferralCommissionMessage() {
 }
 
 // =========== FLEX MENU ==============
-function createFlexMenuContents() {
+export function createFlexMenuContents() {
   return {
     type: "carousel",
     contents: [
@@ -274,7 +274,7 @@ function createFlexMenuContents() {
 }
 
 // =============== PAUSE AUTO RESUME (5 นาที) =================
-async function tryResumeFromPause(userId, lineClient) {
+export async function tryResumeFromPause(userId, lineClient) {
   if (userPausedStates[userId] && userPauseTimestamp[userId]) {
     const now = Date.now();
     if (now - userPauseTimestamp[userId] > pauseAutoResume) {
@@ -289,9 +289,10 @@ async function tryResumeFromPause(userId, lineClient) {
   }
 }
 
+//
 // =============== MAIN FLOW MANAGER =================
 export async function handleCustomerFlow(event, lineClient) {
-  if (globalPause) return []; // **ถ้า pause ทั้งระบบ ไม่ตอบ**
+  if (globalPause) return []; // ถ้า pause ทั้งระบบ ไม่ตอบ
   const userId = event.source?.userId;
   const state = getUserState(userId);
   updateUserState(userId, { lastActive: Date.now() });
@@ -299,7 +300,6 @@ export async function handleCustomerFlow(event, lineClient) {
   const text = event.message?.text?.trim() || "";
 
   await tryResumeFromPause(userId, lineClient);
-
   if (userPausedStates[userId]) return [];
 
   // == Negative Words ตอบจิตวิทยา/อ้อน ==
@@ -344,7 +344,7 @@ export async function handleCustomerFlow(event, lineClient) {
     return reply;
   }
 
-  // == Postback == 
+  // == Postback ==
   if (event.type === "postback" && event.postback?.data) {
     const data = event.postback.data;
     reply.push({ type: "text", text: `✅ คุณกดปุ่ม: ${data}` });
@@ -421,7 +421,7 @@ export async function handleCustomerFlow(event, lineClient) {
 }
 
 // ================== CRM FOLLOW-UP (3,7,15,30 วัน) ==================
-function initCRM(lineClient) {
+export function initCRM(lineClient) {
   setInterval(async () => {
     const now = Date.now();
     const followupPeriods = [
@@ -450,12 +450,11 @@ function initCRM(lineClient) {
   }, 6 * 60 * 60 * 1000);
 }
 
-// ... ฟังก์ชันทั้งหมด ...
-
-// === export function ทีละตัวแบบนี้พอ ===
+// ===== DEBUG LOG/HEALTH CHECK =====
 export async function debugLogToTelegram(msg) {
   try { await sendTelegramAlert(`[DEBUG LOG] ${msg}`); } catch (err) { }
 }
+
 export function getBotHealthStatus() {
   return {
     totalUsers: Object.keys(userStates).length,
@@ -464,10 +463,19 @@ export function getBotHealthStatus() {
     uptimeMinutes: Math.floor(process.uptime() / 60)
   };
 }
-export function handleCustomerFlow(...) { ... }
-export function tryResumeFromPause(...) { ... }
-export function createFlexMenuContents(...) { ... }
-export function initCRM(...) { ... }
 
-// --- ไม่ต้อง export ซ้ำแบบ object ข้างล่างอีก! ---
-
+// ====== Utility: แจ้งเตือน admin เมื่อมี event สำคัญ ======
+async function notifyAdmin(event, detail = "") {
+  try {
+    let msg = `[LINE OA] Event: ${event.type || "-"}\nuserId: ${event.source?.userId || "-"}\n${detail}`;
+    if (event.message?.type === "image") {
+      // ถ้ามีภาพ, ดึงรูปภาพแล้วส่ง telegram
+      const imageBuffer = await getLineImage(event.message.id);
+      await sendTelegramPhoto(imageBuffer, msg);
+    } else {
+      await sendTelegramAlert(msg);
+    }
+  } catch (err) {
+    // log เงียบ ๆ ไม่ throw
+  }
+}
