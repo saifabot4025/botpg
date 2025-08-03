@@ -32,8 +32,12 @@ const teamWords = [
 
 // ============ ASSISTANT ===============
 const assistantNames = ["น้องฟาง", "น้องปุย", "น้องแพรว", "น้องมายด์", "น้องบัว", "น้องน้ำหวาน", "น้องแพม", "น้องจ๋า"];
-function getRandomAssistantName() {
-  return assistantNames[Math.floor(Math.random() * assistantNames.length)];
+function getRandomAssistantName(lastName) {
+  let name;
+  do {
+    name = assistantNames[Math.floor(Math.random() * assistantNames.length)];
+  } while (name === lastName);
+  return name;
 }
 function limitSentences(text, maxSentences = 2) {
   const sentences = text.split(/(?<=[.!?])\s+/);
@@ -52,7 +56,7 @@ function getUserState(userId) {
       lastActive: Date.now(),
       chatHistory: [],
       totalDeposit: 0,
-      assistantName: getRandomAssistantName(),
+      assistantName: getRandomAssistantName(""),
       caseFollowUpCount: 0
     };
   }
@@ -128,12 +132,13 @@ async function fetchFootballData(query) {
     if (teamKeyword) {
       matches = matches.filter(m => [m.team_home, m.team_away].some(t => t.includes(teamKeyword)));
     }
+    if (!matches.length) return "";
     matches = matches.slice(0, 5).map(
       m => `${m.league} คู่ ${m.team_home} vs ${m.team_away} เวลา ${m.time} ผลล่าสุด ${m.score_home}-${m.score_away}`
     ).join("\n");
-    return matches || "ขออภัย ยังไม่มีข้อมูลผลบอลล่าสุดของทีมนี้ค่ะ";
+    return matches || "";
   } catch (err) {
-    return "ขออภัย ระบบข้อมูลฟุตบอลขัดข้องชั่วคราวค่ะ";
+    return "";
   }
 }
 async function fetchLottoData(query) {
@@ -143,9 +148,9 @@ async function fetchLottoData(query) {
     if (json && json.result && json.result.length) {
       return "ผลหวยรัฐบาลล่าสุด: " + json.result.join(", ");
     }
-    return "ขออภัย ยังไม่มีข้อมูลหวยล่าสุดค่ะ";
+    return "";
   } catch (err) {
-    return "ขออภัย ระบบหวยขัดข้องชั่วคราวค่ะ";
+    return "";
   }
 }
 
@@ -203,14 +208,13 @@ export function createFlexMenuContents() {
   return {
     type: "carousel",
     contents: [
-      // กล่อง 1
       {
         type: "bubble",
         hero: { type: "image", url: "https://i.ibb.co/SqbNcr1/image.jpg", size: "full", aspectRatio: "20:13", aspectMode: "cover" },
         body: {
           type: "box", layout: "vertical", backgroundColor: "#4B0082", contents: [
             { type: "text", text: "สมัครสมาชิก + Login", weight: "bold", size: "lg", color: "#FFFFFF" },
-            { type: "text", text: "เว็บเราสมัครฟรีไม่มีค่าใช้จ่าย หากติดขัดปัญหาด้านใดยินดีบริการ 24 ชั่วโมง", size: "sm", color: "#FFFFFF", wrap: true, margin: "md" },
+            { type: "text", text: "เว็บเราสมัครฟรีไม่มีค่าใช้จ่าย หากติดขัดปัญหาด้านใดยินดีบริการ 24 ชั่วโมง", size: "sm", color: "#FFFFFF", wrap: true, margin: "md" }
           ]
         },
         footer: {
@@ -222,14 +226,13 @@ export function createFlexMenuContents() {
           ]
         }
       },
-      // กล่อง 2
       {
         type: "bubble",
         hero: { type: "image", url: "https://i.ibb.co/SqbNcr1/image.jpg", size: "full", aspectRatio: "20:13", aspectMode: "cover" },
         body: {
           type: "box", layout: "vertical", backgroundColor: "#4B0082", contents: [
             { type: "text", text: "แจ้งปัญหาการใช้งาน", weight: "bold", size: "lg", color: "#FFFFFF" },
-            { type: "text", text: "แจ้งปัญหาการใช้งาน แอดมินพร้อมดูแลตลอด 24 ชั่วโมงเลยนะคะ", size: "sm", color: "#FFFFFF", wrap: true, margin: "md" },
+            { type: "text", text: "แจ้งปัญหาการใช้งาน แอดมินพร้อมดูแลตลอด 24 ชั่วโมงเลยนะคะ", size: "sm", color: "#FFFFFF", wrap: true, margin: "md" }
           ]
         },
         footer: {
@@ -241,7 +244,6 @@ export function createFlexMenuContents() {
           ]
         }
       },
-      // กล่อง 3
       {
         type: "bubble",
         hero: { type: "image", url: "https://i.ibb.co/SqbNcr1/image.jpg", size: "full", aspectRatio: "20:13", aspectMode: "cover" },
@@ -274,7 +276,7 @@ export async function tryResumeFromPause(userId, lineClient) {
       updateUserState(userId, { currentCase: null, caseData: {}, caseFollowUpCount: 0 });
       await lineClient.pushMessage(userId, {
         type: "text",
-        text: "คุณพี่ต้องการสอบถามอะไรหรือติดขัดปัญหาอะไรแจ้งน้องได้เลยนะคะ หรืออยากให้แนะนำอะไรคุยเป็นเพื่อนระบายความทุกข์ก็บอกน้องได้ 24 ชั่วโมงเลยน้า 💕"
+        text: "คิดถึงคุณพี่จังเลยค่ะ ถ้าต้องการสอบถามหรือปรึกษาเรื่องไหนแจ้งน้องได้ทุกเวลานะคะ 💖"
       });
       await sendTelegramAlert(`[AUTO RESUME] ระบบปลด pause อัตโนมัติ (ครบ 5 นาที) userId: ${userId}`);
     }
@@ -289,7 +291,7 @@ export async function handleCustomerFlow(event, lineClient) {
   updateUserState(userId, { lastActive: Date.now() });
   const reply = [];
   const text = event.message?.text?.trim() || "";
-  let flexSent = false; // <--- ป้องกัน flex ซ้ำ
+  let flexSent = false;
 
   await tryResumeFromPause(userId, lineClient);
   if (userPausedStates[userId]) return [];
@@ -310,57 +312,17 @@ export async function handleCustomerFlow(event, lineClient) {
     return [{ type: "text", text: "น้องกลับมาดูแลต่อแล้วนะคะ มีอะไรสอบถามเพิ่มเติมแจ้งได้เลยค่า 💕" }];
   }
 
-  // == ส่ง Flex ตามรอบ (ไม่ซ้ำ) ==
-  if (event.type === "message" && shouldSendFlex(userId) && !flexSent) {
+  // == Follow/เพิ่มเพื่อนใหม่ (1 เฟล็ก)
+  if (event.type === "follow" && shouldGreet(userId)) {
+    const introName = getUserState(userId).assistantName;
+    reply.push({ type: "text", text: `สวัสดีค่า ยินดีต้อนรับเข้าสู่ PGTHAI289 นะคะ 💖 วันนี้${introName}ขอดูแลคุณพี่เป็นพิเศษเลย พร้อมช่วยทุกเรื่อง 24 ชั่วโมง!` });
     reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
-    updateUserState(userId, { lastFlexSent: Date.now() });
-    flexSent = true;
-  }
-
-  // == INTENT LOGIC & REAL DATA LOGIC ==
-  const intent = detectIntent(text);
-
-  // (1) --- กรณี admin_case รับข้อมูลหลังพอส
-  if (state.currentCase === "admin_case" && (text.length > 3 || event.message?.type === "image")) {
-    reply.push({ type: "text", text: "ได้รับข้อมูลแล้วค่ะ กำลังส่งให้หัวหน้าฝ่ายดำเนินการ 💕" });
-    userPausedStates[userId] = true;
-    userPauseTimestamp[userId] = Date.now();
-    await notifyAdmin(event, `ข้อมูลจากลูกค้า (เคส ${state.currentCase}): ${text || "ส่งรูป"}`);
+    updateUserState(userId, { lastFlexSent: Date.now(), lastGreeted: Date.now() });
+    await notifyAdmin(event, "ลูกค้าเพิ่มเพื่อนใหม่");
     return reply;
   }
 
-  // (2) --- Intent ที่ต้อง Fetch Real Data และตอบสดได้เลย (บอล/หวย)
-  let realData = "";
-  if (["football", "lotto"].includes(intent)) {
-    realData = await fetchRealData(intent, text);
-    if (realData && !realData.startsWith("ขออภัย")) {
-      reply.push({ type: "text", text: realData });
-      if (shouldSendFlex(userId) && !flexSent) {
-        reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
-        updateUserState(userId, { lastFlexSent: Date.now() });
-        flexSent = true;
-      }
-      await notifyAdmin(event, text || "ลูกค้าส่งข้อความ/รูป");
-      return reply;
-    }
-  }
-
-  // (3) --- Negative Words
-  if (intent === "angry") {
-    const apologyReply = await getCuteDynamicReply(
-      buildPrompt(state.assistantName, "", intent, realData, text)
-    );
-    reply.push({ type: "text", text: sanitizeReply(limitSentences(apologyReply), state.assistantName) });
-    if (shouldSendFlex(userId) && !flexSent) {
-      reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
-      updateUserState(userId, { lastFlexSent: Date.now() });
-      flexSent = true;
-    }
-    await notifyAdmin(event, text);
-    return reply;
-  }
-
-  // (4) --- Postback (Flex Button)
+  // == ฟังชั่น postback กรณีปุ่ม Flex ==
   if (event.type === "postback" && event.postback?.data) {
     const data = event.postback.data;
     reply.push({ type: "text", text: `✅ คุณกดปุ่ม: ${data}` });
@@ -380,20 +342,58 @@ export async function handleCustomerFlow(event, lineClient) {
     return reply;
   }
 
-  // (5) --- Follow/เพิ่มเพื่อนใหม่
-  if (event.type === "follow" && shouldGreet(userId)) {
-    reply.push({ type: "text", text: "สวัสดีค่ะ น้องฟางเป็นแอดมินดูแลลูกค้าของ PGTHAI289 นะคะ 💕" });
-    reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
-    updateUserState(userId, { lastFlexSent: Date.now(), lastGreeted: Date.now() });
-    await notifyAdmin(event, "ลูกค้าเพิ่มเพื่อนใหม่");
+  // == กรณี admin_case รับข้อมูลหลังพอส ==
+  if (state.currentCase === "admin_case" && (text.length > 3 || event.message?.type === "image")) {
+    reply.push({ type: "text", text: "ได้รับข้อมูลแล้วค่ะ กำลังส่งให้หัวหน้าฝ่ายดำเนินการ 💕" });
+    userPausedStates[userId] = true;
+    userPauseTimestamp[userId] = Date.now();
+    await notifyAdmin(event, `ข้อมูลจากลูกค้า (เคส ${state.currentCase}): ${text || "ส่งรูป"}`);
     return reply;
   }
 
-  // (6) --- GPT Chat (default ทุก intent)
+  // == Intent ที่ต้อง Fetch Real Data == ***ถ้าไม่ได้ผลสด = return [] ไม่ตอบเลย
+  let realData = "";
+  const intent = detectIntent(text);
+  if (["football", "lotto"].includes(intent)) {
+    realData = await fetchRealData(intent, text);
+    if (!realData) return [];
+    reply.push({ type: "text", text: realData });
+    if (shouldSendFlex(userId) && !flexSent) {
+      reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
+      updateUserState(userId, { lastFlexSent: Date.now() });
+      flexSent = true;
+    }
+    await notifyAdmin(event, text || "ลูกค้าส่งข้อความ/รูป");
+    return reply;
+  }
+
+  // == Negative Words ==
+  if (intent === "angry") {
+    const apologyReply = await getCuteDynamicReply(
+      buildPrompt(state.assistantName, "", intent, realData, text)
+    );
+    reply.push({ type: "text", text: sanitizeReply(limitSentences(apologyReply), state.assistantName) });
+    if (shouldSendFlex(userId) && !flexSent) {
+      reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
+      updateUserState(userId, { lastFlexSent: Date.now() });
+      flexSent = true;
+    }
+    await notifyAdmin(event, text);
+    return reply;
+  }
+
+  // == ส่ง Flex (ถ้าเข้า Cooldown และยังไม่เคยส่งในรอบนี้) สำหรับ message ปกติ
+  if (event.type === "message" && shouldSendFlex(userId) && !flexSent) {
+    reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
+    updateUserState(userId, { lastFlexSent: Date.now() });
+    flexSent = true;
+  }
+
+  // == GPT Chat (default)
   try {
     const now = Date.now();
     if (!state.assistantName || now - state.lastGreeted > 10 * 60 * 1000) {
-      const newName = getRandomAssistantName();
+      const newName = getRandomAssistantName(state.assistantName);
       updateUserState(userId, { assistantName: newName, lastGreeted: now });
       state.assistantName = newName;
     }
@@ -405,13 +405,6 @@ export async function handleCustomerFlow(event, lineClient) {
     gptReply = sanitizeReply(limitSentences(gptReply), assistantName);
 
     reply.push({ type: "text", text: gptReply });
-
-    // ส่ง Flex ถ้าเข้า Cooldown และยังไม่ได้ส่ง
-    if (shouldSendFlex(userId) && !flexSent) {
-      reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
-      updateUserState(userId, { lastFlexSent: Date.now() });
-      flexSent = true;
-    }
 
     state.chatHistory.push({ role: "user", content: text });
     state.chatHistory.push({ role: "assistant", content: gptReply });
@@ -431,7 +424,6 @@ export async function handleCustomerFlow(event, lineClient) {
     return reply;
   }
 }
-
 // ====== Utility: แจ้งเตือน admin เมื่อมี event สำคัญ ======
 async function notifyAdmin(event, detail = "") {
   try {
