@@ -64,7 +64,7 @@ async function notifyAdmin(event, msg) {
     await sendTelegramAlert(`📢 แจ้งเตือนจาก ${oa}\n👤 ลูกค้า: ${name}\n💬 ข้อความ: ${msg});
     if (event.message?.type === "image") {
       const photo = await getLineImage(event.message.id);
-      if (photo) await sendTelegramPhoto(photo, 📷 รูปจากลูกค้า (${name}));
+      if (photo) await sendTelegramPhoto(photo, `📷 รูปจากลูกค้า (${name}));
     }
   } catch (err) { console.error("notifyAdmin error:", err); }
 }
@@ -75,7 +75,7 @@ async function generateWithdrawReviewMessage() {
   for (let i=0;i<10;i++){
     const phone = randomMaskedPhone();
     const amt = (Math.floor(Math.random()*45000)+5000).toLocaleString();
-    reviews.push(ยูส ${phone} ถอน ${amt});
+    reviews.push(`ยูส ${phone} ถอน ${amt});
   }
   return `📊 รีวิวการถอนล่าสุด\n\n${reviews.join("\n")}\n\nเว็บมั่นคง ปลอดภัย จ่ายจริง 💕;
 }
@@ -133,7 +133,7 @@ async function generateReferralCommissionMessage() {
   for (let i=0;i<10;i++){
     const phone = randomMaskedPhone();
     const amt=(Math.floor(Math.random()*97000)+3000).toLocaleString();
-    lines.push(ยูส ${phone} ได้ค่าคอมมิชชั่น ${amt});
+    lines.push(`ยูส ${phone} ได้ค่าคอมมิชชั่น ${amt});
   }
   return 🤝 ค่าคอมมิชชั่นแนะนำเพื่อน\n\n${lines.join("\n")}\n\n💡 ชวนเพื่อนมาเล่น รับค่าคอมทุกวัน!;
 }
