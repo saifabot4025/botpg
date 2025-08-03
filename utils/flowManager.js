@@ -377,7 +377,7 @@ const negativeWords = [
 const containsNegative = negativeWords.some(word => text.includes(word));
 
 if (containsNegative) {
-  const apologyReply = await getCuteDynamicReply(
+  const apologyReply = await getCuteDynamicReply(`
     บทบาท: เป็นแอดมินสาวมืออาชีพของ PGTHAI289 
 สิ่งที่ต้องทำ:
 1. ฟังความรู้สึกลูกค้าและเข้าใจความผิดหวังหรืออารมณ์เสีย
@@ -386,7 +386,7 @@ if (containsNegative) {
 4. เชิญชวนให้ลูกค้าสอบถามหรือขอความช่วยเหลือได้ 24 ชั่วโมง
 5. ตอบสั้น กระชับ และเป็นกันเองไม่เกิน 2 ประโยค
 `ข้อความจากลูกค้า: "${text}"`
-  );
+  `);
  return [{ type: "text", text: apologyReply }]; // ✅ ตรงนี้ OK แล้ว
 }
   // ✅ ถ้าแอดมินพิมพ์ว่า "หัวหน้าแอดมินรับเคสค่ะ" → ให้บอทหยุดตอบทันที
@@ -650,3 +650,22 @@ function initCRM(lineClient) {
 }
 module.exports = { initCRM, handleCustomerFlow };
 }``
+
+// ✅ ฟังก์ชันใหม่: แจ้งเตือน Debug ไป Telegram
+async function debugLogToTelegram(msg) {
+  try {
+    await sendTelegramAlert(`[DEBUG LOG] ${msg}`);
+  } catch (err) {
+    console.error("debugLogToTelegram error:", err);
+  }
+}
+
+// ✅ ฟังก์ชันใหม่: เช็กสุขภาพระบบ (health check)
+export function getBotHealthStatus() {
+  return {
+    totalUsers: Object.keys(userStates).length,
+    globalPause,
+    memoryUsageMB: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2),
+    uptimeMinutes: Math.floor(process.uptime() / 60)
+  };
+}
