@@ -3,13 +3,14 @@ import fetch from "node-fetch";
 import { getCuteDynamicReply } from "../services/gptService.js";
 import { sendTelegramAlert, sendTelegramPhoto, getLineProfile } from "../services/telegramService.js";
 import { getLineImage } from "../services/lineMediaService.js";
-import fs from "fs";
+import { staffNames } from "../utils/staffNames.js";
 
-/* ================== STATE ================== */
+/* =============== STATE =============== */
 const userStates = {};
 const userPausedStates = {};
-const flexCooldown = 2 * 60 * 60 * 1000; // 2 ชั่วโมง
-const greetCooldown = 10 * 60 * 1000; // 10 นาที
+const flexCooldown = 2 * 60 * 60 * 1000; // 2 ชม.
+const greetCooldown = 10 * 60 * 1000;    // 10 นาที
+const nameLockMinutes = 10;              // 10 นาทีล็อกชื่อ
 
 function getUserState(userId) {
   if (!userStates[userId]) {
@@ -22,6 +23,7 @@ function getUserState(userId) {
       chatHistory: [],
       totalDeposit: 0,
       assistantName: null,
+      assistantNameSetAt: 0,
       caseFollowUpCount: 0,
     };
   }
@@ -36,20 +38,29 @@ function shouldSendFlex(userId) {
   const state = getUserState(userId);
   return Date.now() - state.lastFlexSent > flexCooldown;
 }
-
 function shouldGreet(userId) {
   const state = getUserState(userId);
   return Date.now() - state.lastGreeted > greetCooldown;
 }
-
 function resetUserPauseState(userId) {
   userPausedStates[userId] = false;
   updateUserState(userId, {
     currentCase: null,
     caseData: {},
     caseFollowUpCount: 0,
-    lastGreeted: 0
+    lastGreeted: 0,
   });
+}
+
+/* ========== LOCKED ASSISTANT NAME ========== */
+function pickAssistantName(userId, state) {
+  const now = Date.now();
+  if (state.assistantName && state.assistantNameSetAt && (now - state.assistantNameSetAt < nameLockMinutes * 60 * 1000)) {
+    return state.assistantName;
+  }
+  const newName = staffNames[Math.floor(Math.random() * staffNames.length)];
+  updateUserState(userId, { assistantName: newName, assistantNameSetAt: now });
+  return newName;
 }
 
 /* ================== UTILITIES ================== */
@@ -72,13 +83,10 @@ async function notifyAdmin(event, msg) {
   } catch (err) { console.error("notifyAdmin error:", err); }
 }
 
-// =========== เช็คข้อความเชิงลบ/หยาบคาย/คำด่า ===========
 function detectNegative(text) {
   const negatives = [
-    // คำสุภาพ/ไม่พอใจ
     "โกง", "ขโมย", "ไม่จ่าย", "ถอนเงินไม่ได้", "แย่", "เสียใจ", "โมโห", "หัวร้อน", "โดนโกง", "ไม่ยอมโอน",
     "โดนหลอก", "บริการแย่", "จะฟ้อง", "ไม่คืนเงิน", "เว็บเถื่อน", "ไม่โปร่งใส", "หลอกลวง", "ไม่พอใจ",
-    // คำหยาบ/คำด่ารุนแรง
     "เหี้ย", "สัส", "สัตว์", "ควาย", "โง่", "เฮงซวย", "ห่วย", "ไอ้เหี้ย", "ไอ้สัส", "ไอ้สัตว์", "ไอ้ควาย",
     "ไอ้โง่", "หน้าหี", "อีดอก", "อีเหี้ย", "อีควาย", "อีสัตว์", "อีหน้าหี", "อีสัส", "ชั่ว", "สถุน", "ถ่อย",
     "อัปรีย์", "ต่ำตม", "อีเวร", "เวร", "กรรม", "อีบ้า", "ไอ้บ้า", "กาก", "กะหรี่", "ร่าน", "แม่ง", "เชี่ย", "มึง", "กู", "ฟาย", "แดก", "หัวควย", "ขี้โกง", "โกงแดก", "มึงโกง",
@@ -86,21 +94,17 @@ function detectNegative(text) {
   ];
   return negatives.some(word => text.includes(word));
 }
-
-/* ====== บันทึก Log ข้อความหยาบ/แจ้งแอดมินใน Telegram (แนะนำ) ====== */
 function logNegativeToTelegram(userId, text) {
   sendTelegramAlert(`⚠️ [คำหยาบ/คำแรง] จากยูสเซอร์ ${userId}\nข้อความ: ${text}`);
 }
 
-// ================= FETCH REAL DATA (Google/ข่าว/หวย/บอล) ================
 async function fetchRealData(query) {
   try {
     const encodedQuery = encodeURIComponent(query);
     const url = `https://www.google.com/search?q=${encodedQuery}`;
     const res = await fetch(url, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
       }
     });
     const html = await res.text();
@@ -177,12 +181,11 @@ async function generateReferralCommissionMessage() {
   }
   return `🤝 ค่าคอมมิชชั่นแนะนำเพื่อน\n\n${lines.join("\n")}\n\n💡 ชวนเพื่อนมาเล่น รับค่าคอมทุกวัน!`;
 }
-/* ================== FLEX MENU (4 ปุ่ม) ================== */
+
 function createFlexMenuContents() {
   return {
     type: "carousel",
     contents: [
-      // --- BOX 1: สมัครสมาชิก + Login
       {
         type: "bubble",
         hero: { type: "image", url: "https://i.ibb.co/SqbNcr1/image.jpg", size: "full", aspectRatio: "20:13", aspectMode: "cover" },
@@ -203,7 +206,6 @@ function createFlexMenuContents() {
           ],
         },
       },
-      // --- BOX 2: แจ้งปัญหา
       {
         type: "bubble",
         hero: { type: "image", url: "https://i.ibb.co/SqbNcr1/image.jpg", size: "full", aspectRatio: "20:13", aspectMode: "cover" },
@@ -224,7 +226,6 @@ function createFlexMenuContents() {
           ],
         },
       },
-      // --- BOX 3: รีวิวการถอน + โบนัสไทม์
       {
         type: "bubble",
         hero: { type: "image", url: "https://i.ibb.co/SqbNcr1/image.jpg", size: "full", aspectRatio: "20:13", aspectMode: "cover" },
@@ -251,47 +252,26 @@ function createFlexMenuContents() {
 
 /* ================== MAIN CUSTOMER FLOW ================== */
 async function handleCustomerFlow(event, lineClient) {
-  // ตรวจสอบว่า event มาจาก user เท่านั้น
   if (event.source?.type !== 'user') return [];
-
-  // ป้องกันกรณี event ไม่มี message และไม่ได้เป็น postback/follow
   if (!event.message && event.type !== 'postback' && event.type !== 'follow') return [];
 
-  // ดึง userId
   const userId = event.source?.userId;
-
-  // ดึง/เซ็ต state
   const state = getUserState(userId);
   updateUserState(userId, { lastActive: Date.now() });
-
-  // ดึงข้อความ (หากไม่มีข้อความจะได้ "")
   const text = event.message?.text?.trim() || "";
-
-  // Normalize text สำหรับเทียบเงื่อนไข
   const normalizedText = text.replace(/\s/g, "").trim();
+  const reply = [];
 
-  // [DEBUG] log ทุกครั้ง
-  console.log("[PAUSE DEBUG]", {
-    userId, 
-    text, 
-    normalizedText,
-    isPaused: userPausedStates[userId]
-  });
+  // DEBUG
+  console.log("[PAUSE DEBUG]", { userId, text, normalizedText, isPaused: userPausedStates[userId] });
 
-  const reply = []; // <--- ตรงนี้สำคัญ
-
-  // 1. PAUSE
+  // PAUSE/UNPAUSE
   if (/หัวหน้าแอดมินรับเคส(ค่ะ|ครับ|แล้ว)?/i.test(normalizedText)) {
     userPausedStates[userId] = true;
     updateUserState(userId, { currentCase: "admin_case" });
-    reply.push({
-      type: "text",
-      text: "หัวหน้าแอดมินกำลังดูแลพี่อยู่น้า น้องส่งต่อให้เรียบร้อยค่ะ 💕"
-    });
+    reply.push({ type: "text", text: "หัวหน้าแอดมินกำลังดูแลพี่อยู่น้า น้องส่งต่อให้เรียบร้อยค่ะ 💕" });
     return reply;
   }
-
-  // 2. UNPAUSE
   const unpauseKeywords = [
     "ดำเนินการให้เรียบร้อยแล้ว", "ดำเนินการเรียบร้อยแล้ว", "ดำเนินการเสร็จแล้ว",
     "เรียบร้อยแล้ว", "ทำเสร็จแล้ว", "เสร็จแล้ว", "เรียบร้อย", "เคสนี้เสร็จแล้ว",
@@ -303,49 +283,22 @@ async function handleCustomerFlow(event, lineClient) {
     reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
     return reply;
   }
+ if (userPausedStates[userId]) {
+    // ถ้าอยู่ในโหมด pause ห้ามตอบอะไรเลย ปล่อยให้แอดมินตัวจริงดูแล
+    return [];
+  }
 
-  // 3. ถ้ายัง pause อยู่ ให้ตอบ follow-up message (ระหว่างรอ)
-  if (userPausedStates[userId]) {
-    const followUpCount = (state.caseFollowUpCount || 0) + 1;
-    updateUserState(userId, { caseFollowUpCount: followUpCount });
-    let msg = "";
-    if (followUpCount === 1) {
-      msg = "ขณะนี้หัวหน้าฝ่ายกำลังดำเนินการให้อยู่นะคะ 💕 ระหว่างนี้ลองดูโปรโมชั่นดีๆ ของ PGTHAI289 ได้น้า!";
-    }
-    else if (followUpCount === 2) {
-      msg = "อยู่ในคิวเรียบร้อยแล้วค่ะ 💕 น้องขอให้พี่ใจเย็นๆ ระหว่างนี้ลองชวนเพื่อนมาเล่น PGTHAI289 กัน รับค่าคอมทุกวันด้วยน้า!";
-    }
-    else {
-      msg = "พี่ไม่ต้องกังวลน้า ทีมงานกำลังเร่งทำให้สุดความสามารถเลยค่ะ 💕 ระหว่างรอ ลองเข้าไปดูโปรใหม่ๆ ที่ PGTHAI289 และชวนเพื่อนมาเล่นด้วยกันนะคะ!";
-    }
-    reply.push({ type: "text", text: msg });
-    return reply;
-  }
-  // == สร้าง assistantName 1 ครั้ง/Session ==
-  const assistantNames = ["น้องฟาง", "น้องปุย", "น้องแพรว", "น้องมายด์", "น้องบัว", "น้องน้ำหวาน", "น้องแพม", "น้องจ๋า"];
-  function getRandomAssistantName() {
-    return assistantNames[Math.floor(Math.random() * assistantNames.length)];
-  }
-  if (!state.assistantName) {
-    const newName = getRandomAssistantName();
-    updateUserState(userId, { assistantName: newName });
-    state.assistantName = newName;
-  }
-  const assistantName = state.assistantName;
+  // ========== LOCKED ASSISTANT NAME ==========
+  const assistantName = pickAssistantName(userId, state);
 
-  // == fetch ข้อมูลจริง (หวย/ข่าว/บอล/ทั่วไป) ==
+  // fetch ข้อมูลจริง (หวย/ข่าว/บอล/ทั่วไป)
   let realData = "";
-  if (text.includes("หวย") || text.includes("เลขเด็ด")) {
-    realData = await fetchRealData("เลขเด็ด หวยไทยรัฐ งวดนี้");
-  } else if (text.includes("ผลบอล") || text.includes("ฟุตบอล")) {
-    realData = await fetchRealData("ผลบอลวันนี้");
-  } else if (text.includes("ข่าว") || text.includes("วันนี้")) {
-    realData = await fetchRealData("ข่าวล่าสุดวันนี้");
-  } else if (text.length > 2) {
-    realData = await fetchRealData(text);
-  }
+  if (text.includes("หวย") || text.includes("เลขเด็ด")) realData = await fetchRealData("เลขเด็ด หวยไทยรัฐ งวดนี้");
+  else if (text.includes("ผลบอล") || text.includes("ฟุตบอล")) realData = await fetchRealData("ผลบอลวันนี้");
+  else if (text.includes("ข่าว") || text.includes("วันนี้")) realData = await fetchRealData("ข่าวล่าสุดวันนี้");
+  else if (text.length > 2) realData = await fetchRealData(text);
 
-  // == ตอบลูกค้าสั้น (คะ ครับ เค ok) ==
+  // ตอบลูกค้าสั้น (คะ ครับ เค ok)
   const shortReplies = ["ครับ", "คับ", "ค่ะ", "คะ", "ค่า", "เค", "ok", "โอเค", "ครับผม", "ค่ะจ้า"];
   if (shortReplies.includes(text.toLowerCase())) {
     state.caseFollowUpCount = (state.caseFollowUpCount || 0) + 1;
@@ -377,7 +330,7 @@ async function handleCustomerFlow(event, lineClient) {
     }
   }
 
-  // == ทักทายตอนลูกค้าเพิ่มเพื่อนใหม่ หรือสวัสดีครั้งแรก
+  // ทักทายตอนลูกค้าเพิ่มเพื่อนใหม่ หรือสวัสดีครั้งแรก
   if (
     (event.type === "follow" && shouldGreet(userId)) ||
     (["สวัสดี", "hello", "hi"].includes(text.toLowerCase()))
@@ -389,7 +342,7 @@ async function handleCustomerFlow(event, lineClient) {
     return reply;
   }
 
-  // == กดปุ่ม Postback
+  // กดปุ่ม Postback
   if (event.type === "postback" && event.postback?.data) {
     const data = event.postback.data;
     reply.push({ type: "text", text: `✅ คุณกดปุ่ม: ${data}` });
@@ -408,7 +361,7 @@ async function handleCustomerFlow(event, lineClient) {
     return reply;
   }
 
-  // == รับข้อมูลภาพหรือข้อความในเคส admin ==
+  // รับข้อมูลภาพหรือข้อความในเคส admin
   if (state.currentCase && (text.length > 3 || event.message?.type === "image")) {
     reply.push({ type: "text", text: "ได้รับข้อมูลแล้วค่ะ กำลังส่งให้หัวหน้าฝ่ายดำเนินการ 💕" });
     userPausedStates[userId] = true;
@@ -416,16 +369,16 @@ async function handleCustomerFlow(event, lineClient) {
     return reply;
   }
 
-  // == ส่ง FLEX Menu ตามเวลา
+  // ส่ง FLEX Menu ตามเวลา
   if (event.type === "message" && shouldSendFlex(userId)) {
     reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
     updateUserState(userId, { lastFlexSent: Date.now() });
   }
 
-  // == สร้าง gptPrompt (วิเคราะห์หัวร้อน/คำด่า/หรือปกติ) ==
+  // สร้าง gptPrompt (วิเคราะห์หัวร้อน/คำด่า/หรือปกติ)
   let gptPrompt;
   if (detectNegative(text)) {
-    logNegativeToTelegram(userId, text); // บันทึก/แจ้ง admin ทันที
+    logNegativeToTelegram(userId, text);
     gptPrompt = `
 บทบาท: เป็นแอดมินผู้หญิงชื่อ ${assistantName} ของ PGTHAI289
 หน้าที่: ตอบลูกค้าที่ใช้คำหยาบหรืออารมณ์เสีย (หัวร้อน) ด้วยความเข้าใจและวิธีแบบนักจิตวิทยา
@@ -437,7 +390,6 @@ async function handleCustomerFlow(event, lineClient) {
 5. จำกัด 2 ประโยคหลัก + 1 ประโยคเสริมแนะนำการติดต่อ admin
 ข้อมูลจริง:
 ${realData}
-
 ข้อความลูกค้า: "${text}"
 `;
   } else {
@@ -453,24 +405,18 @@ ${realData}
 6. ถ้าเพิ่งคุยกันไม่เกิน 10 นาที ห้ามเริ่มด้วย "สวัสดี" แต่ให้ต่อเนื่องจากการคุยเดิม
 ข้อมูลจริง:
 ${realData}
-
 ข้อความจากลูกค้า: "${text}"
 `;
   }
 
-  // == เรียก GPT & ตอบกลับ ==
   let gptReply = '';
   try {
-    gptReply = await getCuteDynamicReply(gptPrompt);
+    gptReply = await getCuteDynamicReply(gptPrompt, assistantName);
   } catch (err) {
     console.error('GPT Error:', err);
     gptReply = `พร้อมดูแลพี่เสมอนะคะ 💕 หากมีปัญหาสอบถามได้เลยน้า`;
   }
-
-  reply.push({
-    type: "text",
-    text: gptReply,
-  });
+  reply.push({ type: "text", text: gptReply });
 
   state.chatHistory.push({ role: "assistant", content: gptReply });
   updateUserState(userId, state);
@@ -495,7 +441,9 @@ function initCRM(lineClient) {
       );
       for (const uid of inactive) {
         try {
-          const msg = await getCuteDynamicReply(period.prompt);
+          const state = getUserState(uid);
+          const name = pickAssistantName(uid, state);
+          const msg = await getCuteDynamicReply(period.prompt, name);
           await lineClient.pushMessage(uid, { type: "text", text: msg });
           await lineClient.pushMessage(uid, { type: "flex", altText: "🎀 กลับมาเล่นกับเรา 🎀", contents: createFlexMenuContents() });
           await sendTelegramAlert(`📢 CRM (${period.days} วัน) ส่งข้อความหา: ${uid}`);
