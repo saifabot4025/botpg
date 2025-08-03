@@ -43,7 +43,7 @@ function shouldGreet(userId) {
 function randomMaskedPhone() {
   const prefix = "08";
   const suffix = Math.floor(1000 + Math.random() * 9000);
-  return ${prefix}xxxx${suffix};
+  return `${prefix}xxxx${suffix}`;
 }
 
 async function getRandomName() {
@@ -345,6 +345,7 @@ function sanitizeReply(reply, assistantName) {
 export async function handleCustomerFlow(event){
   const userId=event.source?.userId;
   const state=getUserState(userId);
+  updateUserState(userId, { lastActive: Date.now() });
   const reply=[];
   const text=event.message?.text?.trim()||"";
   // ✅ ตรวจจับคำด่า/ข้อความเชิงลบ
@@ -464,19 +465,7 @@ if (event.type === "follow" && shouldGreet(userId)) {
     reply.push({type:"flex",altText:"🎀 เมนูพิเศษ",contents:createFlexMenuContents()});
     updateUserState(userId,{lastFlexSent:Date.now()});
   }
-const assistantNames = ["น้องฟาง", "น้องปุย", "น้องแพรว", "น้องมายด์", "น้องบัว", "น้องน้ำหวาน", "น้องแพม", "น้องจ๋า"];
 
-function getRandomAssistantName() {
-  return assistantNames[Math.floor(Math.random() * assistantNames.length)];
-}
-
-const now = Date.now();
-if (!state.assistantName || now - state.lastGreeted > 10 * 60 * 1000 || event.type === "follow") {
-  const newName = getRandomAssistantName();
-  updateUserState(userId, { assistantName: newName, lastGreeted: now });
-  state.assistantName = newName; // ✅ อัปเดต state ใน memory ด้วย
-}
-const assistantName = state.assistantName;
 
 try {
   const now = Date.now();
@@ -499,7 +488,20 @@ try {
   ];
   const containsNegative = negativeWords.some(word => text.includes(word));
 
-  // ✅ สร้าง prompt แบบฉลาด
+  const assistantNames = ["น้องฟาง", "น้องปุย", "น้องแพรว", "น้องมายด์", "น้องบัว", "น้องน้ำหวาน", "น้องแพม", "น้องจ๋า"];
+
+function getRandomAssistantName() {
+  return assistantNames[Math.floor(Math.random() * assistantNames.length)];
+}
+
+const now = Date.now();
+if (!state.assistantName || now - state.lastGreeted > 10 * 60 * 1000 || event.type === "follow") {
+  const newName = getRandomAssistantName();
+  updateUserState(userId, { assistantName: newName, lastGreeted: now });
+  state.assistantName = newName; // ✅ อัปเดต state ใน memory ด้วย
+}
+const assistantName = state.assistantName;
+// ✅ สร้าง prompt แบบฉลาด
   let gptPrompt;
   if (containsNegative) {
     gptPrompt = 
@@ -542,7 +544,7 @@ if (shortReplies.includes(text.toLowerCase())) {
   if (state.caseFollowUpCount === 2) {
     // ✅ ดีเลย์ 3 วินาทีก่อนตอบ
     setTimeout(() => {
-      event.reply([
+      lineClient.pushMessage(userId,
         { 
           type: "text", 
           text: ${assistantName} อยู่ดูแลพี่อยู่นะคะ 💕 ถ้ามีอะไรเพิ่มเติมถามได้เลยน้า เว็บ PGTHAI289 ฝาก-ถอนไว เล่นง่าย และถอนได้หลักล้านแบบชัวร์ๆ เลยค่ะ ✨
@@ -555,7 +557,7 @@ if (shortReplies.includes(text.toLowerCase())) {
   if (state.caseFollowUpCount >= 3) {
     // ✅ ดีเลย์ 3 วินาทีแล้วตอบพร้อมรีเซ็ตนับใหม่
     setTimeout(() => {
-      event.reply([
+      lineClient.pushMessage(userId,
         { 
           type: "text", 
           text: ถ้าพี่มีคำถามเพิ่มเติม ${assistantName} พร้อมช่วยดูแลเสมอนะคะ 🥰 และอย่าลืมชวนเพื่อนมาเล่น PGTHAI289 รับค่าคอมทุกวันด้วยน้า 💕
@@ -568,7 +570,13 @@ if (shortReplies.includes(text.toLowerCase())) {
   }
 }
   // ✅ เรียก GPT
-  const gptReply = await getCuteDynamicReply(gptPrompt);
+  let gptReply = '';
+  try {
+    gptReply = await getCuteDynamicReply(gptPrompt);
+  } catch (err) {
+    console.error('GPT Error:', err);
+    gptReply = `${assistantName} พร้อมดูแลพี่เสมอนะคะ 💕 หากมีปัญหาสอบถามได้เลยน้า`;
+  }
 
   // ✅ push ข้อความตอบกลับ
   reply.push({
