@@ -352,9 +352,6 @@ async function handleCustomerFlow(event, lineClient) {
     return [];
   }
 
-  // LOCKED ASSISTANT NAME
-  const assistantName = pickAssistantName(userId, state);
-
   // fetch ข้อมูลจริง (หวย/ข่าว/บอล/ทั่วไป)
   let realData = "";
   if (text.includes("หวย") || text.includes("เลขเด็ด")) realData = await fetchRealData("เลขเด็ด หวยไทยรัฐ งวดนี้");
