@@ -450,11 +450,12 @@ function initCRM(lineClient) {
   }, 6 * 60 * 60 * 1000);
 }
 
-// ===== DEBUG LOG/HEALTH CHECK =====
+// ... ฟังก์ชันทั้งหมด ...
+
+// === export function ทีละตัวแบบนี้พอ ===
 export async function debugLogToTelegram(msg) {
   try { await sendTelegramAlert(`[DEBUG LOG] ${msg}`); } catch (err) { }
 }
-
 export function getBotHealthStatus() {
   return {
     totalUsers: Object.keys(userStates).length,
@@ -463,13 +464,10 @@ export function getBotHealthStatus() {
     uptimeMinutes: Math.floor(process.uptime() / 60)
   };
 }
+export function handleCustomerFlow(...) { ... }
+export function tryResumeFromPause(...) { ... }
+export function createFlexMenuContents(...) { ... }
+export function initCRM(...) { ... }
 
-// === EXPORT AS MODULE (ESM) ===
-export {
-  handleCustomerFlow,
-  tryResumeFromPause,
-  createFlexMenuContents,
-  initCRM,
-  debugLogToTelegram,
-  getBotHealthStatus
-};
+// --- ไม่ต้อง export ซ้ำแบบ object ข้างล่างอีก! ---
+
