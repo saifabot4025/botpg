@@ -252,42 +252,58 @@ async function handleCustomerFlow(event, lineClient) {
   const userId = event.source?.userId;
   const state = getUserState(userId);
   updateUserState(userId, { lastActive: Date.now() });
+
   const text = event.message?.text?.trim() || "";
-  const normalizedText = text.replace(/\s/g, "").trim();
+  const normalizedText = text.toLowerCase().replace(/\s/g, "");
   const reply = [];
 
-  console.log("[PAUSE DEBUG]", { userId, text, normalizedText, isPaused: userPausedStates[userId] });
+  // Debug log สถานะ pause และ currentCase
+  console.log(`[PAUSE DEBUG] userId=${userId} isPaused=${!!userPausedStates[userId]} currentCase=${state.currentCase}`);
+  console.log(`[PAUSE DEBUG] text='${text}' normalized='${normalizedText}'`);
 
-  // PAUSE MODE - ตรวจจับคำว่า "หัวหน้าแอดมินรับเคส" โดยไม่ต้องตัดช่องว่าง (ไม่ต้องมี (ค่ะ|ครับ|แล้ว)? เพราะตัดช่องว่างแล้วไม่ตรง)
-  if (/หัวหน้าแอดมินรับเคส/i.test(text)) {
-    userPausedStates[userId] = true;
-    updateUserState(userId, { currentCase: "admin_case" });
-    reply.push({ type: "text", text: "หัวหน้าแอดมินกำลังดูแลพี่อยู่น้า น้องส่งต่อให้เรียบร้อยค่ะ 💕" });
+  // คำสั่ง reset pause (สำหรับทดสอบ)
+  if (/resetpause/.test(normalizedText)) {
+    resetUserPauseState(userId);
+    reply.push({ type: "text", text: "ระบบได้รีเซ็ตสถานะ pause ให้เรียบร้อยแล้วค่ะ" });
     return reply;
   }
 
-  // ปลด pause - ใช้ text ตรวจสอบคำครบถ้วนจะดีกว่า
+  // PAUSE MODE - ตรวจจับคำว่า "หัวหน้าแอดมินรับเคส" แบบ ignore space และ case
+  if (/หัวหน้าแอดมินรับเคส/.test(normalizedText)) {
+    userPausedStates[userId] = true;
+    updateUserState(userId, { currentCase: "admin_case" });
+    reply.push({ type: "text", text: "หัวหน้าแอดมินกำลังดูแลพี่อยู่น้า น้องส่งต่อให้เรียบร้อยค่ะ 💕" });
+    console.log(`[PAUSE DEBUG] Pause mode enabled for userId=${userId}`);
+    return reply;
+  }
+
+  // คำสำคัญปลด pause
   const unpauseKeywords = [
     "ดำเนินการให้เรียบร้อยแล้ว", "ดำเนินการเรียบร้อยแล้ว", "ดำเนินการเสร็จแล้ว",
     "เรียบร้อยแล้ว", "ทำเสร็จแล้ว", "เสร็จแล้ว", "เรียบร้อย", "เคสนี้เสร็จแล้ว",
     "เคสนี้เรียบร้อยแล้ว", "จัดการเสร็จแล้ว", "ดำเนินการเรียบร้อย"
-  ];
-  if (userPausedStates[userId] && unpauseKeywords.some(keyword => text.includes(keyword))) {
+  ].map(k => k.replace(/\s/g, ""));
+
+  // ปลด pause ถ้าคำในข้อความตรงกับคำสำคัญ
+  if (userPausedStates[userId] && unpauseKeywords.some(keyword => normalizedText.includes(keyword))) {
     resetUserPauseState(userId);
     reply.push({ type: "text", text: "💕 หากมีอะไรสอบถามเพิ่มเติม แจ้งน้องได้ตลอด 24 ชั่วโมงเลยนะคะ มาสนุกกับ PGTHAI289 กันน้า! 🎰✨ แนะนำเพื่อนมาเล่น รับค่าคอมทุกวันด้วยนะคะ 💖" });
     reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
+    console.log(`[PAUSE DEBUG] Pause mode disabled for userId=${userId}`);
     return reply;
   }
 
-  // รับข้อมูลภาพหรือข้อความในเคส admin ตอนอยู่ pause mode
+  // ถ้า pause mode และเป็นเคส admin_case ให้รับข้อมูลรูปหรือข้อความได้
   if (userPausedStates[userId] && state.currentCase === "admin_case" && (text.length > 3 || event.message?.type === "image")) {
     reply.push({ type: "text", text: "ได้รับข้อมูลแล้วประสานงานหัวหน้าฝ่ายทำรายการให้ค่ะ 💕" });
     await notifyAdmin(event, `ข้อมูลจากลูกค้า (เคส ${state.currentCase}): ${text || "ส่งรูป"}`);
+    console.log(`[PAUSE DEBUG] รับข้อมูลใน pause mode จาก userId=${userId}`);
     return reply;
   }
 
   // ถ้า pause อยู่ห้ามตอบข้อความอื่นๆ
   if (userPausedStates[userId]) {
+    console.log(`[PAUSE DEBUG] Pause mode active, ไม่ตอบข้อความอื่น userId=${userId}`);
     return [];
   }
 
