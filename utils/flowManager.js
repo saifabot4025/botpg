@@ -1,11 +1,9 @@
-/* ================== FLOW MANAGER (FINAL PRO VERSION) ================== */
 import fetch from "node-fetch";
 import { getCuteDynamicReply } from "../services/gptService.js";
 import { sendTelegramAlert, sendTelegramPhoto, getLineProfile } from "../services/telegramService.js";
 import { getLineImage } from "../services/lineMediaService.js";
 import { staffNames } from "../utils/staffNames.js";
 
-/* =============== STATE =============== */
 const userStates = {};
 const userPausedStates = {};
 const flexCooldown = 2 * 60 * 60 * 1000; // 2 ชม.
@@ -52,7 +50,6 @@ function resetUserPauseState(userId) {
   });
 }
 
-/* ========== LOCKED ASSISTANT NAME ========== */
 function pickAssistantName(userId, state) {
   const now = Date.now();
   if (state.assistantName && state.assistantNameSetAt && (now - state.assistantNameSetAt < nameLockMinutes * 60 * 1000)) {
@@ -63,7 +60,6 @@ function pickAssistantName(userId, state) {
   return newName;
 }
 
-/* ================== UTILITIES ================== */
 function randomMaskedPhone() {
   const prefix = "08";
   const suffix = Math.floor(1000 + Math.random() * 9000);
@@ -116,7 +112,6 @@ async function fetchRealData(query) {
   }
 }
 
-/* ================== MESSAGE GENERATORS ================== */
 async function generateWithdrawReviewMessage() {
   const reviews = [];
   for (let i = 0; i < 10; i++) {
@@ -182,7 +177,6 @@ async function generateReferralCommissionMessage() {
   return `🤝 ค่าคอมมิชชั่นแนะนำเพื่อน\n\n${lines.join("\n")}\n\n💡 ชวนเพื่อนมาเล่น รับค่าคอมทุกวัน!`;
 }
 
-/* ================== FLEX MENU (4 ปุ่ม) ================== */
 function createFlexMenuContents() {
   return {
     type: "carousel",
@@ -251,7 +245,6 @@ function createFlexMenuContents() {
   };
 }
 
-/* ================== MAIN CUSTOMER FLOW ================== */
 async function handleCustomerFlow(event, lineClient) {
   if (event.source?.type !== 'user') return [];
   if (!event.message && event.type !== 'postback' && event.type !== 'follow') return [];
@@ -263,16 +256,16 @@ async function handleCustomerFlow(event, lineClient) {
   const normalizedText = text.replace(/\s/g, "").trim();
   const reply = [];
 
-  // DEBUG
   console.log("[PAUSE DEBUG]", { userId, text, normalizedText, isPaused: userPausedStates[userId] });
 
-  // PAUSE/UNPAUSE
+  // PAUSE MODE
   if (/หัวหน้าแอดมินรับเคส(ค่ะ|ครับ|แล้ว)?/i.test(normalizedText)) {
     userPausedStates[userId] = true;
     updateUserState(userId, { currentCase: "admin_case" });
     reply.push({ type: "text", text: "หัวหน้าแอดมินกำลังดูแลพี่อยู่น้า น้องส่งต่อให้เรียบร้อยค่ะ 💕" });
     return reply;
   }
+
   const unpauseKeywords = [
     "ดำเนินการให้เรียบร้อยแล้ว", "ดำเนินการเรียบร้อยแล้ว", "ดำเนินการเสร็จแล้ว",
     "เรียบร้อยแล้ว", "ทำเสร็จแล้ว", "เสร็จแล้ว", "เรียบร้อย", "เคสนี้เสร็จแล้ว",
@@ -284,8 +277,9 @@ async function handleCustomerFlow(event, lineClient) {
     reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
     return reply;
   }
+
   if (userPausedStates[userId]) {
-    // ถ้าอยู่ในโหมด pause ห้ามตอบอะไรเลย ปล่อยให้แอดมินตัวจริงดูแล
+    // อยู่ใน pause mode ห้ามตอบอะไรเพิ่มเติม
     return [];
   }
 
@@ -336,8 +330,8 @@ async function handleCustomerFlow(event, lineClient) {
     (event.type === "follow" && shouldGreet(userId)) ||
     (["สวัสดี", "hello", "hi"].includes(text.toLowerCase()))
   ) {
+    reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() }); // ส่ง flex ก่อนข้อความ
     reply.push({ type: "text", text: `สวัสดีค่ะ ${assistantName} เป็นแอดมินดูแลลูกค้าของเว็บ PGTHAI289 นะคะ 💕` });
-    reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
     updateUserState(userId, { lastFlexSent: Date.now(), lastGreeted: Date.now() });
     await notifyAdmin(event, "ลูกค้าเพิ่มเพื่อนใหม่หรือทักทาย");
     return reply;
@@ -370,7 +364,7 @@ async function handleCustomerFlow(event, lineClient) {
     return reply;
   }
 
-  // ส่ง FLEX Menu ตามเวลา
+  // ส่ง FLEX Menu ตามเวลา (1 ครั้ง/2 ชม. หรือปรับเป็น 1 ชม. ตามต้องการ)
   if (event.type === "message" && shouldSendFlex(userId)) {
     reply.push({ type: "flex", altText: "🎀 เมนูพิเศษ", contents: createFlexMenuContents() });
     updateUserState(userId, { lastFlexSent: Date.now() });
