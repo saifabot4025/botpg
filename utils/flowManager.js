@@ -61,10 +61,10 @@ async function notifyAdmin(event, msg) {
     const profile = await getLineProfile(event.source?.userId);
     const name = profile?.displayName || "ไม่ทราบชื่อ";
     const oa = process.env.LINE_OA_NAME || "OA";
-    await sendTelegramAlert(📢 แจ้งเตือนจาก ${oa}\n👤 ลูกค้า: ${name}\n💬 ข้อความ: ${msg});
+    await sendTelegramAlert(`📢 แจ้งเตือนจาก ${oa}\n👤 ลูกค้า: ${name}\n💬 ข้อความ: ${msg}`);
     if (event.message?.type === "image") {
       const photo = await getLineImage(event.message.id);
-      if (photo) await sendTelegramPhoto(photo, 📷 รูปจากลูกค้า (${name}));
+      if (photo) await sendTelegramPhoto(photo, `📷 รูปจากลูกค้า (${name})`);
     }
   } catch (err) { console.error("notifyAdmin error:", err); }
 }
