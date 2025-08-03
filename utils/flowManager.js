@@ -61,10 +61,10 @@ async function notifyAdmin(event, msg) {
     const profile = await getLineProfile(event.source?.userId);
     const name = profile?.displayName || "ไม่ทราบชื่อ";
     const oa = process.env.LINE_OA_NAME || "OA";
-    await sendTelegramAlert(`📢 แจ้งเตือนจาก ${oa}\n👤 ลูกค้า: ${name}\n💬 ข้อความ: ${msg}`);
+    await sendTelegramAlert(`📢 แจ้งเตือนจาก ${oa}\n👤 ลูกค้า: ${name}\n💬 ข้อความ: ${msg});
     if (event.message?.type === "image") {
       const photo = await getLineImage(event.message.id);
-      if (photo) await sendTelegramPhoto(photo, `📷 รูปจากลูกค้า (${name})`);
+      if (photo) await sendTelegramPhoto(photo, 📷 รูปจากลูกค้า (${name}));
     }
   } catch (err) { console.error("notifyAdmin error:", err); }
 }
@@ -77,7 +77,7 @@ async function generateWithdrawReviewMessage() {
     const amt = (Math.floor(Math.random()*45000)+5000).toLocaleString();
     reviews.push(ยูส ${phone} ถอน ${amt});
   }
-  return 📊 รีวิวการถอนล่าสุด\n\n${reviews.join("\n")}\n\nเว็บมั่นคง ปลอดภัย จ่ายจริง 💕;
+  return `📊 รีวิวการถอนล่าสุด\n\n${reviews.join("\n")}\n\nเว็บมั่นคง ปลอดภัย จ่ายจริง 💕;
 }
 
 async function generateMaxWithdrawMessage() {
@@ -494,7 +494,6 @@ function getRandomAssistantName() {
   return assistantNames[Math.floor(Math.random() * assistantNames.length)];
 }
 
-const now = Date.now();
 if (!state.assistantName || now - state.lastGreeted > 10 * 60 * 1000 || event.type === "follow") {
   const newName = getRandomAssistantName();
   updateUserState(userId, { assistantName: newName, lastGreeted: now });
@@ -547,7 +546,7 @@ if (shortReplies.includes(text.toLowerCase())) {
       lineClient.pushMessage(userId,
         { 
           type: "text", 
-          text: ${assistantName} อยู่ดูแลพี่อยู่นะคะ 💕 ถ้ามีอะไรเพิ่มเติมถามได้เลยน้า เว็บ PGTHAI289 ฝาก-ถอนไว เล่นง่าย และถอนได้หลักล้านแบบชัวร์ๆ เลยค่ะ ✨
+          text: `${assistantName}` อยู่ดูแลพี่อยู่นะคะ 💕 ถ้ามีอะไรเพิ่มเติมถามได้เลยน้า เว็บ PGTHAI289 ฝาก-ถอนไว เล่นง่าย และถอนได้หลักล้านแบบชัวร์ๆ เลยค่ะ ✨
         }
       ]);
     }, 3000);
@@ -606,7 +605,6 @@ if (shortReplies.includes(text.toLowerCase())) {
 /* ================== CRM FOLLOW-UP (3,7,15,30 วัน) ================== */
 function initCRM(lineClient) {
   setInterval(async () => {
-    const now = Date.now();
     const followupPeriods = [
       { days: 3, prompt: "สร้างข้อความน่ารัก ชวนลูกค้าที่หายไป 3 วัน กลับมาเล่น PGTHAI289 แบบมืออาชีพ" },
       { days: 7, prompt: "สร้างข้อความชวนลูกค้าที่หายไป 7 วัน กลับมาเล่น PGTHAI289 พร้อมบอกว่ามีโปรดีๆ รออยู่" },
@@ -623,7 +621,7 @@ function initCRM(lineClient) {
           const msg = await getCuteDynamicReply(period.prompt);
           await lineClient.pushMessage(uid, { type: "text", text: msg });
           await lineClient.pushMessage(uid, { type: "flex", altText: "🎀 กลับมาเล่นกับเรา 🎀", contents: createFlexMenuContents() });
-          await sendTelegramAlert(📢 CRM (${period.days} วัน) ส่งข้อความหา: ${uid});
+          await sendTelegramAlert(`📢 CRM (${period.days} วัน) ส่งข้อความหา: ${uid});
           updateUserState(uid, { lastActive: Date.now() });
         } catch (err) {
           console.error(CRM Error (${period.days} วัน):, err);
