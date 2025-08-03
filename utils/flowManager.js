@@ -341,7 +341,7 @@ function sanitizeReply(reply, assistantName) {
 }
 
 /* ================== MAIN FLOW ================== */
-export async function handleCustomerFlow(event) {
+async function handleCustomerFlow(event) {
   const userId = event.source?.userId;
   const state = getUserState(userId);
   updateUserState(userId, { lastActive: Date.now() });
